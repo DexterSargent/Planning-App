@@ -87,7 +87,7 @@ class FootballApp(ctk.CTk):
         self.main_frame.grid_columnconfigure(0, weight=1)
         self.main_frame.grid_rowconfigure(2, weight=1)
 
-        title = ctk.CTkLabel(self.main_frame, text="Welcome back.", font=ctk.CTkFont(size=26, weight="bold"))
+        title = ctk.CTkLabel(self.main_frame, text="Welcome back Chucky. What up.", font=ctk.CTkFont(size=26, weight="bold"))
         title.grid(row=0, column=0, padx=30, pady=(30, 10), sticky="w")
         subtitle = ctk.CTkLabel(self.main_frame, text="Track your metrics, plan your blocks, and execute.", font=ctk.CTkFont(size=14), text_color="gray")
         subtitle.grid(row=1, column=0, padx=30, pady=(0, 30), sticky="w")
@@ -370,7 +370,7 @@ class FootballApp(ctk.CTk):
 
         header_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         header_frame.grid(row=0, column=0, padx=30, pady=(20, 5), sticky="ew")
-        title = ctk.CTkLabel(header_frame, text="Training Blueprint Builder 🏈", font=ctk.CTkFont(size=24, weight="bold"))
+        title = ctk.CTkLabel(header_frame, text="Training Strategy 🏈", font=ctk.CTkFont(size=24, weight="bold"))
         title.pack(side="left")
 
         self.train_tabs = ctk.CTkTabview(self.main_frame)
