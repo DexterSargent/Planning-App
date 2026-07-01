@@ -85,48 +85,190 @@ class FootballApp(ctk.CTk):
     def show_home_view(self):
         self.reset_main_frame()
         self.main_frame.grid_columnconfigure(0, weight=1)
-        self.main_frame.grid_rowconfigure(2, weight=1)
+        self.main_frame.grid_rowconfigure(0, weight=0)   # banner strip (~5%)
+        self.main_frame.grid_rowconfigure(1, weight=1)   # workout logger + meals (~95%, split 75/20)
 
-        title = ctk.CTkLabel(self.main_frame, text="Welcome back Chucky. What up.", font=ctk.CTkFont(size=26, weight="bold"))
-        title.grid(row=0, column=0, padx=30, pady=(30, 10), sticky="w")
-        subtitle = ctk.CTkLabel(self.main_frame, text="Track your metrics, plan your blocks, and execute.", font=ctk.CTkFont(size=14), text_color="gray")
-        subtitle.grid(row=1, column=0, padx=30, pady=(0, 30), sticky="w")
+        # ---- 5%: unscheduled-time banner ----
+        self.home_banner = ctk.CTkFrame(self.main_frame, fg_color="#1A242F", corner_radius=8, height=42)
+        self.home_banner.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
+        self.home_banner.grid_propagate(False)
+        self.lbl_free_time = ctk.CTkLabel(self.home_banner, text="", font=ctk.CTkFont(size=13, weight="bold"), text_color=GOOD)
+        self.lbl_free_time.pack(pady=10)
+        self.refresh_free_time_banner()
 
-        cards_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        cards_frame.grid(row=2, column=0, padx=30, pady=10, sticky="nsew")
-        cards_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        body = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        body.grid(row=1, column=0, padx=20, pady=(0, 20), sticky="nsew")
+        body.grid_rowconfigure(0, weight=1)
+        body.grid_columnconfigure(0, weight=75)  # workout logger ≈ 75%
+        body.grid_columnconfigure(1, weight=20)  # meal list ≈ 20%
 
-        # ---- Next Session: soonest upcoming Training Session event ----
-        next_session_text = "No sessions scheduled\nAdd one from the Schedule tab"
+        # ---- 75%: today's workout logging interface ----
+        self.workout_logger_panel = ctk.CTkFrame(body, corner_radius=12, border_width=1, border_color=ACCENT)
+        self.workout_logger_panel.grid(row=0, column=0, padx=(0, 10), sticky="nsew")
+        self.render_workout_logger()
+
+        # ---- 20%: today's planned meals ----
+        self.meals_panel = ctk.CTkFrame(body, corner_radius=12)
+        self.meals_panel.grid(row=0, column=1, sticky="nsew")
+        self.render_home_meals_panel()
+
+    # ---- Home: 5% banner ----
+    def refresh_free_time_banner(self):
+        """Unscheduled minutes between 06:00 and 24:00 today, based on scheduled event durations."""
         today_str = date.today().isoformat()
-        upcoming = self.db.get_events_for_range(today_str, (date.today() + timedelta(days=14)).isoformat())
-        for ev in upcoming:
-            if ev["event_type"] == "🏋️ Training Session":
-                next_session_text = f"{ev['title']}\n{ev['event_date']} • {ev['start_time'] or '--:--'}"
-                break
+        WINDOW_START_MIN = 6 * 60
+        WINDOW_END_MIN = 24 * 60
+        scheduled = 0
+        for ev in self.db.get_events_for_day(today_str):
+            if not ev["start_time"]:
+                continue
+            try:
+                hh, mm = ev["start_time"].split(":")
+                start_min = int(hh) * 60 + int(mm)
+            except (ValueError, AttributeError):
+                continue
+            dur = ev["duration_mins"] or 30
+            end_min = start_min + dur
+            # Clip the event to the 6am-midnight window before counting it
+            clipped_start = max(start_min, WINDOW_START_MIN)
+            clipped_end = min(end_min, WINDOW_END_MIN)
+            if clipped_end > clipped_start:
+                scheduled += clipped_end - clipped_start
 
-        card_t = ctk.CTkFrame(cards_frame, height=150)
-        card_t.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-        ctk.CTkLabel(card_t, text="Next Session", font=ctk.CTkFont(weight="bold")).pack(pady=10)
-        ctk.CTkLabel(card_t, text=next_session_text, text_color="gray", justify="center").pack(pady=5)
+        free_minutes = max((WINDOW_END_MIN - WINDOW_START_MIN) - scheduled, 0)
+        hrs, mins = divmod(free_minutes, 60)
+        self.lbl_free_time.configure(text=f"🕒 {hrs}h {mins}m unscheduled between 6:00 AM – 12:00 AM today")
 
-        # ---- Nutrition Target: today's logged kcal vs a placeholder goal ----
-        nutrition_history = self.db.get_nutrition_history(limit=365)
-        today_kcal = sum(n["kcal"] for n in nutrition_history if n["log_date"] == today_str)
-        target_kcal = 3800
-        card_d = ctk.CTkFrame(cards_frame, height=150)
-        card_d.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        ctk.CTkLabel(card_d, text="Nutrition Target", font=ctk.CTkFont(weight="bold")).pack(pady=10)
-        ctk.CTkLabel(card_d, text=f"Energy: {today_kcal:,.0f} / {target_kcal:,} kcal\nLogged via meal events", text_color="gray", justify="center").pack(pady=5)
+    # ---- Home: 75% workout logger ----
+    def render_workout_logger(self):
+        for w in self.workout_logger_panel.winfo_children():
+            w.destroy()
+        self.workout_logger_panel.grid_columnconfigure(0, weight=1)
+        self.workout_logger_panel.grid_rowconfigure(2, weight=1)
 
-        # ---- Today's Focus: count of today's events by type ----
-        todays_events = self.db.get_events_for_day(today_str)
-        training_count = sum(1 for e in todays_events if e["event_type"] == "🏋️ Training Session")
-        other_count = len(todays_events) - training_count
-        card_c = ctk.CTkFrame(cards_frame, height=150)
-        card_c.grid(row=0, column=2, padx=10, pady=10, sticky="nsew")
-        ctk.CTkLabel(card_c, text="Today's Focus", font=ctk.CTkFont(weight="bold")).pack(pady=10)
-        ctk.CTkLabel(card_c, text=f"{other_count} Other Events • {training_count} Training\n{len(todays_events)} total scheduled today", text_color="gray", justify="center").pack(pady=5)
+        next_event = self.db.get_next_training_event()
+
+        header = ctk.CTkFrame(self.workout_logger_panel, fg_color="transparent")
+        header.grid(row=0, column=0, padx=20, pady=(20, 5), sticky="ew")
+        ctk.CTkLabel(header, text="Today's Workout 🏋️", font=ctk.CTkFont(size=18, weight="bold"), text_color=ACCENT).pack(side="left")
+
+        if not next_event:
+            ctk.CTkLabel(self.workout_logger_panel, text="No workout planned.", font=ctk.CTkFont(size=14)).grid(row=1, column=0, padx=20, pady=10, sticky="w")
+            ctk.CTkButton(self.workout_logger_panel, text="Go to Schedule →", fg_color="#3A3A3A",
+                          command=self.show_calendar_view).grid(row=2, column=0, padx=20, pady=10, sticky="w")
+            return
+
+        workout = self.db.get_workout(next_event["ref_workout_id"])
+        if not workout:
+            ctk.CTkLabel(self.workout_logger_panel, text="The linked workout no longer exists.", font=ctk.CTkFont(size=14)).grid(row=1, column=0, padx=20, pady=10, sticky="w")
+            return
+
+        subtitle = ctk.CTkLabel(
+            self.workout_logger_panel,
+            text=f"{workout['name']}  •  {next_event['event_date']} {next_event['start_time'] or ''}".strip(),
+            font=ctk.CTkFont(size=13), text_color="gray",
+        )
+        subtitle.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="w")
+
+        exercises = self.db.get_workout_exercises(workout["id"])
+        self._logger_exercise_entries = []  # [{exercise_id, sets, reps, weight_entry, reps_entry}]
+
+        scroll = ctk.CTkScrollableFrame(self.workout_logger_panel, fg_color="transparent")
+        scroll.grid(row=2, column=0, padx=20, pady=(0, 10), sticky="nsew")
+        scroll.grid_columnconfigure(0, weight=1)
+
+        if not exercises:
+            ctk.CTkLabel(scroll, text="This workout has no exercises.", text_color="gray").grid(row=0, column=0, pady=10)
+
+        for idx, ex in enumerate(exercises):
+            row = ctk.CTkFrame(scroll, fg_color="#242424", corner_radius=8)
+            row.grid(row=idx, column=0, padx=5, pady=5, sticky="ew")
+            row.grid_columnconfigure(0, weight=1)
+
+            ctk.CTkLabel(row, text=ex["name"], font=ctk.CTkFont(size=14, weight="bold")).grid(row=0, column=0, padx=15, pady=(10, 2), sticky="w")
+            planned = f"Planned: {ex['sets'] or '-'} sets x {ex['reps'] or '-'} reps @ {ex['weight'] if ex['weight'] is not None else '-'}"
+            ctk.CTkLabel(row, text=planned, font=ctk.CTkFont(size=11), text_color="gray").grid(row=1, column=0, padx=15, pady=(0, 10), sticky="w")
+
+            entry_frame = ctk.CTkFrame(row, fg_color="transparent")
+            entry_frame.grid(row=0, column=1, rowspan=2, padx=15, pady=10, sticky="e")
+            ctk.CTkLabel(entry_frame, text="Weight lifted:", font=ctk.CTkFont(size=11)).grid(row=0, column=0, padx=(0, 5))
+            weight_entry = ctk.CTkEntry(entry_frame, width=80, placeholder_text=str(ex["weight"]) if ex["weight"] is not None else "lbs")
+            weight_entry.grid(row=0, column=1, padx=(0, 10))
+            ctk.CTkLabel(entry_frame, text="Reps:", font=ctk.CTkFont(size=11)).grid(row=0, column=2, padx=(0, 5))
+            reps_entry = ctk.CTkEntry(entry_frame, width=50, placeholder_text=str(ex["reps"]) if ex["reps"] is not None else "")
+            reps_entry.grid(row=0, column=3)
+
+            self._logger_exercise_entries.append({
+                "exercise_id": ex["exercise_id"], "sets": ex["sets"], "reps": ex["reps"],
+                "weight": ex["weight"], "weight_entry": weight_entry, "reps_entry": reps_entry,
+            })
+
+        self.lbl_logger_status = ctk.CTkLabel(self.workout_logger_panel, text="", text_color="orange")
+        self.lbl_logger_status.grid(row=3, column=0, padx=20, sticky="w")
+
+        ctk.CTkButton(self.workout_logger_panel, text="✅ Complete Workout & Log Metrics", fg_color="#2E7D32",
+                      hover_color="#1B5E20", font=ctk.CTkFont(weight="bold"), height=40,
+                      command=lambda: self.complete_workout(next_event["id"])).grid(row=4, column=0, padx=20, pady=(5, 20), sticky="ew")
+
+    def complete_workout(self, event_id):
+        today_str = date.today().isoformat()
+        for item in getattr(self, "_logger_exercise_entries", []):
+            raw_weight = item["weight_entry"].get().strip()
+            weight_val = None
+            if raw_weight:
+                try:
+                    weight_val = float(raw_weight)
+                except ValueError:
+                    weight_val = None
+            if weight_val is None:
+                weight_val = item["weight"]  # fall back to planned target
+            if weight_val is None:
+                continue  # nothing usable to log for this exercise
+
+            raw_reps = item["reps_entry"].get().strip()
+            reps_val = int(raw_reps) if raw_reps.isdigit() else item["reps"]
+
+            self.db.log_lift(item["exercise_id"], weight_val, sets=item["sets"], reps=reps_val, log_date=today_str)
+
+        # The planned session is done — remove it so the dashboard surfaces the next one.
+        self.db.delete_calendar_event(event_id)
+        self.lbl_logger_status.configure(text="Workout logged. Nice work.", text_color=GOOD)
+        self.render_workout_logger()
+        self.refresh_free_time_banner()
+
+    # ---- Home: 20% today's meals ----
+    def render_home_meals_panel(self):
+        for w in self.meals_panel.winfo_children():
+            w.destroy()
+        self.meals_panel.grid_columnconfigure(0, weight=1)
+        self.meals_panel.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(self.meals_panel, text="Today's Meals 🍴", font=ctk.CTkFont(size=16, weight="bold"), text_color=ACCENT).grid(row=0, column=0, padx=15, pady=(15, 5), sticky="w")
+
+        scroll = ctk.CTkScrollableFrame(self.meals_panel, fg_color="transparent")
+        scroll.grid(row=1, column=0, padx=10, pady=(0, 15), sticky="nsew")
+        scroll.grid_columnconfigure(0, weight=1)
+
+        today_str = date.today().isoformat()
+        meals = [e for e in self.db.get_events_for_day(today_str) if e["event_type"] == "🥗 Meal/Nutrition"]
+
+        if not meals:
+            ctk.CTkLabel(scroll, text="No meals planned today.", text_color="gray", wraplength=180, justify="left").grid(row=0, column=0, padx=5, pady=10, sticky="w")
+            return
+
+        for idx, meal in enumerate(meals):
+            card = ctk.CTkButton(
+                scroll, text=f"{meal['start_time'] or '--:--'}\n{meal['title']}", anchor="w",
+                fg_color="#242424", hover_color="#2E7D32", font=ctk.CTkFont(size=12),
+                command=lambda m=meal: self.show_meal_quicklook(m),
+            )
+            card.grid(row=idx, column=0, padx=5, pady=4, sticky="ew")
+
+    def show_meal_quicklook(self, meal_event):
+        if meal_event.get("ref_recipe_id"):
+            self.show_recipe_details(meal_event["ref_recipe_id"], meal_event["title"])
+        else:
+            messagebox.showinfo(meal_event["title"], meal_event.get("notes") or "No further details for this meal.")
 
     # ==================================================================
     # DIET & NUTRITION

@@ -113,8 +113,8 @@ class DatabaseManager:
                         ref_recipe_id INTEGER,
                         notes TEXT,
                         created_at TIMESTAMP,
-                        FOREIGN KEY(ref_workout_id) REFERENCES workouts(id) ON DELETE SET NULL,
-                        FOREIGN KEY(ref_recipe_id) REFERENCES recipes(id) ON DELETE SET NULL
+                        FOREIGN KEY(ref_workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
+                        FOREIGN KEY(ref_recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
                     )""")
 
         # ---------- Analytics logs ----------
@@ -204,6 +204,16 @@ class DatabaseManager:
         row = self.conn.execute("SELECT * FROM exercises WHERE name = ?", (name,)).fetchone()
         return dict(row) if row else None
 
+    def get_exercise(self, exercise_id):
+        row = self.conn.execute("SELECT * FROM exercises WHERE id = ?", (exercise_id,)).fetchone()
+        return dict(row) if row else None
+
+    def search_exercises(self, query):
+        rows = self.conn.execute(
+            "SELECT * FROM exercises WHERE name LIKE ? ORDER BY name", (f"%{query}%",)
+        ).fetchall()
+        return self._rows_to_dicts(rows)
+
     def get_or_create_exercise(self, name, category=None):
         existing = self.get_exercise_by_name(name)
         if existing:
@@ -251,6 +261,10 @@ class DatabaseManager:
         ).fetchall()
         return self._rows_to_dicts(rows)
 
+    def get_recipe(self, recipe_id):
+        row = self.conn.execute("SELECT * FROM recipes WHERE id = ?", (recipe_id,)).fetchone()
+        return dict(row) if row else None
+
     def get_recipe_ingredients(self, recipe_id):
         rows = self.conn.execute(
             """SELECT ri.quantity_g, i.* FROM recipe_ingredients ri
@@ -260,7 +274,37 @@ class DatabaseManager:
         ).fetchall()
         return self._rows_to_dicts(rows)
 
+    def update_recipe(self, recipe_id, name, ingredient_list, time_to_cook_mins=0):
+        """
+        Replaces the recipe's ingredient list and recalculates totals, in place.
+        ingredient_list: list of dicts {ingredient_id, quantity_g}
+        """
+        total_kcal = 0.0
+        total_cost = 0.0
+        for item in ingredient_list:
+            ing = self.get_ingredient(item["ingredient_id"])
+            if not ing:
+                continue
+            factor = item["quantity_g"] / 100.0
+            total_kcal += ing["kcal_per_100g"] * factor
+            total_cost += ing["cost_per_100g"] * factor
+
+        self.conn.execute(
+            "UPDATE recipes SET name = ?, total_kcal = ?, cost = ?, time_to_cook_mins = ? WHERE id = ?",
+            (name, round(total_kcal), round(total_cost, 2), time_to_cook_mins, recipe_id),
+        )
+        self.conn.execute("DELETE FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
+        for item in ingredient_list:
+            self.conn.execute(
+                "INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity_g) VALUES (?, ?, ?)",
+                (recipe_id, item["ingredient_id"], item["quantity_g"]),
+            )
+        self.conn.commit()
+        return recipe_id
+
     def delete_recipe(self, recipe_id):
+        # Cascade: any calendar event planning this recipe no longer makes sense once it's gone.
+        self.conn.execute("DELETE FROM calendar_events WHERE ref_recipe_id = ?", (recipe_id,))
         self.conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
         self.conn.commit()
 
@@ -298,6 +342,10 @@ class DatabaseManager:
         ).fetchall()
         return self._rows_to_dicts(rows)
 
+    def get_workout(self, workout_id):
+        row = self.conn.execute("SELECT * FROM workouts WHERE id = ?", (workout_id,)).fetchone()
+        return dict(row) if row else None
+
     def get_workout_exercises(self, workout_id):
         rows = self.conn.execute(
             """SELECT we.sets, we.reps, we.weight, e.name, e.id as exercise_id FROM workout_exercises we
@@ -307,7 +355,30 @@ class DatabaseManager:
         ).fetchall()
         return self._rows_to_dicts(rows)
 
+    def update_workout(self, workout_id, name, exercise_list, duration_mins=None):
+        """
+        Replaces the workout's exercise list in place.
+        exercise_list: list of dicts {exercise_id, sets, reps, weight}
+        """
+        if duration_mins is None:
+            duration_mins = sum((e.get("sets") or 0) for e in exercise_list) * 3
+
+        self.conn.execute(
+            "UPDATE workouts SET name = ?, duration_mins = ? WHERE id = ?",
+            (name, duration_mins, workout_id),
+        )
+        self.conn.execute("DELETE FROM workout_exercises WHERE workout_id = ?", (workout_id,))
+        for e in exercise_list:
+            self.conn.execute(
+                "INSERT INTO workout_exercises (workout_id, exercise_id, sets, reps, weight) VALUES (?, ?, ?, ?, ?)",
+                (workout_id, e["exercise_id"], e.get("sets"), e.get("reps"), e.get("weight")),
+            )
+        self.conn.commit()
+        return workout_id
+
     def delete_workout(self, workout_id):
+        # Cascade: any calendar event planning this workout no longer makes sense once it's gone.
+        self.conn.execute("DELETE FROM calendar_events WHERE ref_workout_id = ?", (workout_id,))
         self.conn.execute("DELETE FROM workouts WHERE id = ?", (workout_id,))
         self.conn.commit()
 
@@ -339,6 +410,32 @@ class DatabaseManager:
             "SELECT * FROM calendar_events WHERE event_date = ? ORDER BY start_time", (day,)
         ).fetchall()
         return self._rows_to_dicts(rows)
+
+    def get_event(self, event_id):
+        row = self.conn.execute("SELECT * FROM calendar_events WHERE id = ?", (event_id,)).fetchone()
+        return dict(row) if row else None
+
+    def get_next_training_event(self, from_date=None):
+        """Soonest upcoming Training Session event (today or later) that references a workout."""
+        from_date = from_date or date.today().isoformat()
+        row = self.conn.execute(
+            """SELECT * FROM calendar_events
+               WHERE event_type = '🏋️ Training Session' AND ref_workout_id IS NOT NULL
+                 AND event_date >= ?
+               ORDER BY event_date ASC, start_time ASC LIMIT 1""",
+            (from_date,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def update_calendar_event(self, event_id, title, event_type, event_date, start_time=None,
+                               duration_mins=None, ref_workout_id=None, ref_recipe_id=None, notes=None):
+        self.conn.execute(
+            """UPDATE calendar_events SET title = ?, event_type = ?, event_date = ?, start_time = ?,
+               duration_mins = ?, ref_workout_id = ?, ref_recipe_id = ?, notes = ? WHERE id = ?""",
+            (title, event_type, event_date, start_time, duration_mins,
+             ref_workout_id, ref_recipe_id, notes, event_id),
+        )
+        self.conn.commit()
 
     def delete_calendar_event(self, event_id):
         self.conn.execute("DELETE FROM calendar_events WHERE id = ?", (event_id,))
