@@ -51,16 +51,16 @@ class FootballApp(ctk.CTk):
         self.btn_home = ctk.CTkButton(self.sidebar_frame, text="Dashboard Home", anchor="w", command=self.show_home_view)
         self.btn_home.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
 
-        self.btn_training = ctk.CTkButton(self.sidebar_frame, text="🏋️ Training & Exercises", anchor="w", command=self.show_training_view)
+        self.btn_training = ctk.CTkButton(self.sidebar_frame, text="Training", anchor="w", command=self.show_training_view)
         self.btn_training.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
 
-        self.btn_diet = ctk.CTkButton(self.sidebar_frame, text="🥗 Diet & Nutrition", anchor="w", command=self.show_diet_view)
+        self.btn_diet = ctk.CTkButton(self.sidebar_frame, text="Meal Planner", anchor="w", command=self.show_diet_view)
         self.btn_diet.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
 
-        self.btn_calendar = ctk.CTkButton(self.sidebar_frame, text="📅 Schedule & Life", anchor="w", command=self.show_calendar_view)
+        self.btn_calendar = ctk.CTkButton(self.sidebar_frame, text="Schedule", anchor="w", command=self.show_calendar_view)
         self.btn_calendar.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
 
-        self.btn_analytics = ctk.CTkButton(self.sidebar_frame, text="📊 Analytics", anchor="w", command=self.show_analytics_view)
+        self.btn_analytics = ctk.CTkButton(self.sidebar_frame, text="Analytics 📊", anchor="w", command=self.show_analytics_view)
         self.btn_analytics.grid(row=5, column=0, padx=20, pady=10, sticky="ew")
 
         self.main_frame = None
@@ -165,7 +165,7 @@ class FootballApp(ctk.CTk):
         name_frame = ctk.CTkFrame(builder_panel, fg_color="transparent")
         name_frame.grid(row=1, column=0, padx=15, pady=5, sticky="ew")
         name_frame.grid_columnconfigure(0, weight=1)
-        self.entry_recipe_name = ctk.CTkEntry(name_frame, placeholder_text="Enter Recipe Name (e.g., Post-Workout Steak Bowl)")
+        self.entry_recipe_name = ctk.CTkEntry(name_frame, placeholder_text="Enter Recipe Name (e.g., Post-Workout Smoothie)")
         self.entry_recipe_name.grid(row=0, column=0, sticky="ew")
 
         aggregator_box = ctk.CTkFrame(builder_panel, fg_color="#1A242F", height=50)
@@ -176,7 +176,7 @@ class FootballApp(ctk.CTk):
         self.lbl_running_cost = ctk.CTkLabel(aggregator_box, text="Estimated Cost: $0.00", font=ctk.CTkFont(size=13, weight="bold"), text_color=GOOD)
         self.lbl_running_cost.grid(row=0, column=1, pady=10)
 
-        self.recipe_sandbox_scroll = ctk.CTkScrollableFrame(builder_panel, label_text="Current Ingredients in Formula")
+        self.recipe_sandbox_scroll = ctk.CTkScrollableFrame(builder_panel, label_text="Current Ingredients in Recipe")
         self.recipe_sandbox_scroll.grid(row=3, column=0, padx=15, pady=5, sticky="nsew")
         self.recipe_sandbox_scroll.grid_columnconfigure(0, weight=1)
         self.render_recipe_sandbox()
@@ -184,7 +184,7 @@ class FootballApp(ctk.CTk):
         search_frame = ctk.CTkFrame(builder_panel, fg_color="transparent")
         search_frame.grid(row=4, column=0, padx=15, pady=10, sticky="ew")
         search_frame.grid_columnconfigure(0, weight=1)
-        self.entry_search_ing = ctk.CTkEntry(search_frame, placeholder_text="🔎 Type exact/partial name from Master Database...")
+        self.entry_search_ing = ctk.CTkEntry(search_frame, placeholder_text="🔎 Type exact/partial name from Database...")
         self.entry_search_ing.grid(row=0, column=0, padx=(0, 5), sticky="ew")
         self.entry_ing_qty = ctk.CTkEntry(search_frame, width=70, placeholder_text="Qty (g)")
         self.entry_ing_qty.grid(row=0, column=1, padx=5)
@@ -204,7 +204,7 @@ class FootballApp(ctk.CTk):
 
         ctk.CTkLabel(custom_panel, text="Register New Ingredient", font=ctk.CTkFont(size=15, weight="bold")).grid(row=0, column=0, padx=15, pady=10, sticky="w")
         ctk.CTkLabel(custom_panel, text="Ingredient Name:", font=ctk.CTkFont(size=11)).grid(row=1, column=0, padx=15, pady=(5, 0), sticky="w")
-        self.entry_new_ing_name = ctk.CTkEntry(custom_panel, placeholder_text="e.g. Bison Flank")
+        self.entry_new_ing_name = ctk.CTkEntry(custom_panel, placeholder_text="e.g. Chicken Breast")
         self.entry_new_ing_name.grid(row=2, column=0, padx=15, pady=(0, 10), sticky="ew")
         ctk.CTkLabel(custom_panel, text="Calories (per 100g):", font=ctk.CTkFont(size=11)).grid(row=3, column=0, padx=15, pady=(5, 0), sticky="w")
         self.entry_new_ing_kcal = ctk.CTkEntry(custom_panel, placeholder_text="0")
@@ -212,7 +212,7 @@ class FootballApp(ctk.CTk):
         ctk.CTkLabel(custom_panel, text="Cost (per 100g):", font=ctk.CTkFont(size=11)).grid(row=5, column=0, padx=15, pady=(5, 0), sticky="w")
         self.entry_new_ing_cost = ctk.CTkEntry(custom_panel, placeholder_text="$0.00")
         self.entry_new_ing_cost.grid(row=6, column=0, padx=15, pady=(0, 15), sticky="ew")
-        ctk.CTkButton(custom_panel, text="🚀 Inject into Master DB", fg_color="#E65100", hover_color="#BF360C",
+        ctk.CTkButton(custom_panel, text="Save to Database", fg_color="#E65100", hover_color="#BF360C",
                       command=self.register_ingredient).grid(row=7, column=0, padx=15, pady=10, sticky="ew")
 
         self.lbl_ing_status = ctk.CTkLabel(custom_panel, text="", text_color=GOOD)
@@ -307,7 +307,7 @@ class FootballApp(ctk.CTk):
         self.entry_new_ing_name.delete(0, "end")
         self.entry_new_ing_kcal.delete(0, "end")
         self.entry_new_ing_cost.delete(0, "end")
-        self.lbl_ing_status.configure(text=f"'{name}' added to master database.", text_color=GOOD)
+        self.lbl_ing_status.configure(text=f"'{name}' added to database.", text_color=GOOD)
 
     def save_recipe(self):
         name = self.entry_recipe_name.get().strip()
@@ -392,7 +392,7 @@ class FootballApp(ctk.CTk):
         builder_panel.grid_rowconfigure(2, weight=1)
         builder_panel.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(builder_panel, text="Workout Blueprint Sandbox", font=ctk.CTkFont(size=15, weight="bold"), text_color=ACCENT).grid(row=0, column=0, padx=15, pady=10, sticky="w")
+        ctk.CTkLabel(builder_panel, text="Workout Sandbox", font=ctk.CTkFont(size=15, weight="bold"), text_color=ACCENT).grid(row=0, column=0, padx=15, pady=10, sticky="w")
 
         name_frame = ctk.CTkFrame(builder_panel, fg_color="transparent")
         name_frame.grid(row=1, column=0, padx=15, pady=5, sticky="ew")
@@ -400,7 +400,7 @@ class FootballApp(ctk.CTk):
         self.entry_workout_name = ctk.CTkEntry(name_frame, placeholder_text="Enter Workout Name (e.g., Lower Body Power - Phase 1)")
         self.entry_workout_name.grid(row=0, column=0, sticky="ew")
 
-        self.workout_sandbox_scroll = ctk.CTkScrollableFrame(builder_panel, label_text="Routine Architecture")
+        self.workout_sandbox_scroll = ctk.CTkScrollableFrame(builder_panel, label_text="Exercises in Workout")
         self.workout_sandbox_scroll.grid(row=2, column=0, padx=15, pady=10, sticky="nsew")
         self.workout_sandbox_scroll.grid_columnconfigure(0, weight=1)
         self.render_workout_sandbox()
@@ -433,7 +433,7 @@ class FootballApp(ctk.CTk):
         self.lbl_train_status = ctk.CTkLabel(builder_panel, text="", text_color="orange")
         self.lbl_train_status.grid(row=5, column=0, padx=15, sticky="w")
 
-        ctk.CTkButton(builder_panel, text="💾 Save Workout Blueprint", fg_color=ACCENT, font=ctk.CTkFont(weight="bold"),
+        ctk.CTkButton(builder_panel, text="💾 Save Workout", fg_color=ACCENT, font=ctk.CTkFont(weight="bold"),
                       command=self.save_workout).grid(row=6, column=0, padx=15, pady=15, sticky="ew")
 
         # ---- Right column: 1RM vault ----
