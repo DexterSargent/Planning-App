@@ -160,7 +160,7 @@ class FootballApp(ctk.CTk):
         builder_panel.grid_rowconfigure(3, weight=1)
         builder_panel.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(builder_panel, text="Recipe Blueprint Sandbox", font=ctk.CTkFont(size=15, weight="bold"), text_color=ACCENT).grid(row=0, column=0, padx=15, pady=10, sticky="w")
+        ctk.CTkLabel(builder_panel, text="Recipe Builder", font=ctk.CTkFont(size=15, weight="bold"), text_color=ACCENT).grid(row=0, column=0, padx=15, pady=10, sticky="w")
 
         name_frame = ctk.CTkFrame(builder_panel, fg_color="transparent")
         name_frame.grid(row=1, column=0, padx=15, pady=5, sticky="ew")
@@ -176,7 +176,7 @@ class FootballApp(ctk.CTk):
         self.lbl_running_cost = ctk.CTkLabel(aggregator_box, text="Estimated Cost: $0.00", font=ctk.CTkFont(size=13, weight="bold"), text_color=GOOD)
         self.lbl_running_cost.grid(row=0, column=1, pady=10)
 
-        self.recipe_sandbox_scroll = ctk.CTkScrollableFrame(builder_panel, label_text="Current Ingredients in Recipe")
+        self.recipe_sandbox_scroll = ctk.CTkScrollableFrame(builder_panel, label_text="Ingredients in Recipe")
         self.recipe_sandbox_scroll.grid(row=3, column=0, padx=15, pady=5, sticky="nsew")
         self.recipe_sandbox_scroll.grid_columnconfigure(0, weight=1)
         self.render_recipe_sandbox()
@@ -194,7 +194,7 @@ class FootballApp(ctk.CTk):
         self.lbl_diet_status = ctk.CTkLabel(builder_panel, text="", text_color="orange")
         self.lbl_diet_status.grid(row=5, column=0, padx=15, sticky="w")
 
-        ctk.CTkButton(builder_panel, text="💾 Save/Commit Recipe", fg_color=ACCENT, font=ctk.CTkFont(weight="bold"),
+        ctk.CTkButton(builder_panel, text="💾 Save Recipe", fg_color=ACCENT, font=ctk.CTkFont(weight="bold"),
                       command=self.save_recipe).grid(row=6, column=0, padx=15, pady=15, sticky="ew")
 
         # ---- Right column: register a brand new ingredient into the master DB ----
@@ -345,8 +345,11 @@ class FootballApp(ctk.CTk):
                           command=lambda rid=r["id"]: self.delete_recipe_and_refresh(rid)).grid(row=0, column=2, rowspan=2, padx=(0, 15), pady=8, sticky="e")
 
     def delete_recipe_and_refresh(self, recipe_id):
-        self.db.delete_recipe(recipe_id)
-        self.refresh_recipe_list()
+        try:
+            self.db.delete_recipe(recipe_id)
+            self.refresh_recipe_list()
+        except Exception:
+            messagebox.showerror("Delete Error", "Cannot delete this item: it is currently being used in a calendar event.")
 
     def show_recipe_details(self, recipe_id, recipe_name):
         popup = ctk.CTkToplevel(self)
@@ -392,7 +395,7 @@ class FootballApp(ctk.CTk):
         builder_panel.grid_rowconfigure(2, weight=1)
         builder_panel.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(builder_panel, text="Workout Sandbox", font=ctk.CTkFont(size=15, weight="bold"), text_color=ACCENT).grid(row=0, column=0, padx=15, pady=10, sticky="w")
+        ctk.CTkLabel(builder_panel, text="Workout Builder", font=ctk.CTkFont(size=15, weight="bold"), text_color=ACCENT).grid(row=0, column=0, padx=15, pady=10, sticky="w")
 
         name_frame = ctk.CTkFrame(builder_panel, fg_color="transparent")
         name_frame.grid(row=1, column=0, padx=15, pady=5, sticky="ew")
@@ -633,8 +636,11 @@ class FootballApp(ctk.CTk):
                           command=lambda wid=w_row["id"]: self.delete_workout_and_refresh(wid)).grid(row=0, column=1, rowspan=2, padx=15, pady=8, sticky="e")
 
     def delete_workout_and_refresh(self, workout_id):
-        self.db.delete_workout(workout_id)
-        self.refresh_workout_list()
+        try:
+            self.db.delete_workout(workout_id)
+            self.refresh_workout_list()
+        except Exception:
+            messagebox.showerror("Delete Error", "Cannot delete this item: it is currently being used in a calendar event.")
 
     # ==================================================================
     # CALENDAR / SCHEDULE SYSTEM & MODALS
@@ -727,7 +733,6 @@ class FootballApp(ctk.CTk):
 
     def auto_update_workout_duration(self, selected_workout_name):
         """Finds the selected workout in the database and auto-fills its stored duration"""
-        w = self.db.get_exercise_by_name  # no-op reference to keep name resolution obvious
         workout = next((row for row in self.db.get_all_workouts() if row["name"] == selected_workout_name), None)
         if workout and hasattr(self, "dyn_val_duration") and self.dyn_val_duration.winfo_exists():
             self.dyn_val_duration.delete(0, "end")
