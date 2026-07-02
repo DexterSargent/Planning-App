@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -63,23 +63,34 @@ function getMonthGrid(date) {
   const d = new Date(date);
   const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
   const endDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  const firstWeekDay = firstDay.getDay();
-  const weeks = [];
-  let current = 1 - firstWeekDay;
-  while (current <= endDay) {
-    const week = [];
-    for (let i = 0; i < 7; i += 1) {
-      const day = new Date(d.getFullYear(), d.getMonth(), current);
-      week.push({
-        date: formatDate(day),
-        active: current >= 1 && current <= endDay,
-        label: day.getDate(),
-      });
-      current += 1;
-    }
-    weeks.push(week);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const cells = [];
+  let current = 1 - startOffset;
+  for (let i = 0; i < 35; i += 1) {
+    const day = new Date(d.getFullYear(), d.getMonth(), current);
+    cells.push({
+      date: formatDate(day),
+      active: day.getMonth() === d.getMonth(),
+      label: day.getDate(),
+      current: day.getMonth() === d.getMonth(),
+    });
+    current += 1;
   }
-  return weeks;
+  return Array.from({ length: 5 }, (_, rowIndex) => cells.slice(rowIndex * 7, rowIndex * 7 + 7));
+}
+
+function getWeekDays(date) {
+  const start = new Date(`${startOfWeek(formatDate(date))}T00:00:00`);
+  const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return Array.from({ length: 7 }, (_, index) => {
+    const current = new Date(start);
+    current.setDate(start.getDate() + index);
+    return {
+      date: formatDate(current),
+      weekday: weekdayNames[index],
+      label: current.getDate(),
+    };
+  });
 }
 
 function getWeekRange(date) {
@@ -87,9 +98,24 @@ function getWeekRange(date) {
   return { start, end: addDays(start, 6) };
 }
 
+function getMonthTitle(date) {
+  const d = new Date(date);
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  return `${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function getHourlyGrid() {
+  return Array.from({ length: 24 }, (_, hour) => ({
+    label: `${hour.toString().padStart(2, '0')}:00`,
+    hour,
+  }));
+}
+
 function clampedMinutes(minutes) {
   return Math.max(0, Math.round(minutes));
 }
+
+const CALENDAR_ROW_HEIGHT = 84;
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -110,6 +136,9 @@ function App() {
   const [ingredientModalVisible, setIngredientModalVisible] = useState(false);
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [dragInfo, setDragInfo] = useState(null);
+  const weekGridRef = useRef(null);
+  const dragClickRef = useRef(false);
 
   const [statusMessage, setStatusMessage] = useState('');
   const [theme, setTheme] = useState('light');
@@ -152,10 +181,24 @@ function App() {
 
   const currentDay = formatDate(selectedDate);
   const currentDayFull = formatDateFull(selectedDate);
+  const weekDates = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
+  const hourlyGrid = useMemo(() => getHourlyGrid(), []);
+  const eventsByDate = useMemo(() => {
+    const map = {};
+    weekDates.forEach((day) => { map[day.date] = []; });
+    events.forEach((event) => {
+      if (map[event.event_date]) {
+        map[event.event_date].push(event);
+      }
+    });
+    Object.values(map).forEach((arr) => arr.sort((a, b) => (a.start_time || '00:00').localeCompare(b.start_time || '00:00')));
+    return map;
+  }, [events, weekDates]);
   const dayEvents = useMemo(
     () => events.filter((event) => event.event_date === currentDay),
     [events, currentDay],
   );
+  const currentDayEvents = eventsByDate[currentDay] || [];
   const todayWorkouts = useMemo(
     () => dayEvents.filter((event) => event.event_type === '🏋️ Training Session'),
     [dayEvents],
@@ -173,6 +216,9 @@ function App() {
   }, [dayEvents]);
   const freeMinutes = clampedMinutes(18 * 60 - scheduledMinutes);
   const freeTimeLabel = `${Math.floor(freeMinutes / 60)}h ${freeMinutes % 60}m free`;
+
+  const weekRangeLabel = `${new Date(weekViewRange.start).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(weekViewRange.end).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+  const dayRangeLabel = `${new Date(currentDay).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 
   const activeEventClasses = {
     work: '💼 Work / Meeting',
@@ -193,6 +239,17 @@ function App() {
   useEffect(() => {
     loadScheduleRange();
   }, [scheduleView, selectedDate]);
+
+  useEffect(() => {
+    if ((scheduleView === 'week' || scheduleView === 'day') && weekGridRef.current && currentDayEvents.length) {
+      const nextEvent = currentDayEvents.find((event) => event.start_time);
+      if (nextEvent) {
+        const [hour, minute] = nextEvent.start_time.split(':').map(Number);
+        const position = Math.max(0, (hour + minute / 60 - 1) * CALENDAR_ROW_HEIGHT);
+        weekGridRef.current.scrollTop = position;
+      }
+    }
+  }, [scheduleView, currentDayEvents]);
 
   async function fetchJson(path, options = {}) {
     const response = await fetch(`${API_URL}${path}`, options);
@@ -271,6 +328,24 @@ function App() {
         ? { start: currentDay, end: currentDay }
         : weekViewRange;
     fetchEventsForRange(start, end).catch((error) => setStatusMessage(error.message));
+  }
+
+  function changeMonth(offset) {
+    const nextDate = new Date(selectedDate);
+    nextDate.setMonth(nextDate.getMonth() + offset);
+    setSelectedDate(nextDate);
+  }
+
+  function changeWeek(offset) {
+    const nextDate = new Date(selectedDate);
+    nextDate.setDate(nextDate.getDate() + offset * 7);
+    setSelectedDate(nextDate);
+  }
+
+  function changeDay(offset) {
+    const nextDate = new Date(selectedDate);
+    nextDate.setDate(nextDate.getDate() + offset);
+    setSelectedDate(nextDate);
   }
 
   function handleInputChange(setter) {
@@ -531,12 +606,12 @@ function App() {
     }
   }
 
-  function openEventModal(category) {
+  function openEventModal(category, time = '', date = formatDate(selectedDate)) {
     setScheduleForm({
-      category: activeEventClasses[category],
+      category: activeEventClasses[category] || activeEventClasses.work,
       title: '',
-      date: formatDate(selectedDate),
-      start_time: '',
+      date,
+      start_time: time,
       duration_mins: '',
       ref_workout_id: '',
       ref_recipe_id: '',
@@ -545,6 +620,23 @@ function App() {
       notes: '',
     });
     setSelectedEvent(null);
+    setEventModalVisible(true);
+  }
+
+  function openEventEdit(event) {
+    setScheduleForm({
+      category: event.event_type,
+      title: event.title,
+      date: event.event_date,
+      start_time: event.start_time || '',
+      duration_mins: event.duration_mins?.toString() || '',
+      ref_workout_id: event.ref_workout_id?.toString() || '',
+      ref_recipe_id: event.ref_recipe_id?.toString() || '',
+      min_duration: '',
+      max_duration: '',
+      notes: event.notes || '',
+    });
+    setSelectedEvent(event);
     setEventModalVisible(true);
   }
 
@@ -573,8 +665,10 @@ function App() {
       duration = Math.round((Number(scheduleForm.min_duration) + Number(scheduleForm.max_duration)) / 2);
     }
     try {
-      await fetchJson('/calendar', {
-        method: 'POST',
+      const method = selectedEvent ? 'PUT' : 'POST';
+      const url = selectedEvent ? `/calendar/${selectedEvent.id}` : '/calendar';
+      await fetchJson(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
@@ -588,8 +682,9 @@ function App() {
         }),
       });
       setEventModalVisible(false);
+      setSelectedEvent(null);
       loadScheduleRange();
-      setStatusMessage('Event added.');
+      setStatusMessage(selectedEvent ? 'Event updated.' : 'Event added.');
     } catch (error) {
       setStatusMessage(error.message);
     }
@@ -609,6 +704,107 @@ function App() {
     } catch (error) {
       setStatusMessage(error.message);
     }
+  }
+
+  function timeToPosition(hour, minutes = 0, rowHeight = 84) {
+    return hour * rowHeight + (minutes / 60) * rowHeight;
+  }
+
+  function durationToHeight(duration, rowHeight = 84) {
+    return (duration / 60) * rowHeight;
+  }
+
+  function formatTimeForInput(time) {
+    return time ? time : '';
+  }
+
+  function parseCellTime(clientY, cellTop) {
+    const offset = clientY - cellTop;
+    const rowHeight = 84;
+    const hourIndex = Math.floor(offset / rowHeight);
+    const minute = Math.round(((offset % rowHeight) / rowHeight) * 60 / 15) * 15;
+    const finalHour = Math.min(23, Math.max(0, hourIndex));
+    const finalMinutes = minute === 60 ? 0 : minute;
+    return `${finalHour.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+  }
+
+  function handleCalendarCellClick(event, date) {
+    if (dragClickRef.current) {
+      dragClickRef.current = false;
+      return;
+    }
+    const cell = event.currentTarget;
+    const time = parseCellTime(event.clientY, cell.getBoundingClientRect().top);
+    openEventModal('work', time, date);
+  }
+
+  function handleEventDragStart(event, calendarEvent) {
+    event.stopPropagation();
+    dragClickRef.current = false;
+    setDragInfo({
+      type: 'move',
+      event: calendarEvent,
+      originY: event.clientY,
+      initialStart: calendarEvent.start_time || '08:00',
+      initialDuration: Number(calendarEvent.duration_mins) || 60,
+      deltaMinutes: 0,
+    });
+  }
+
+  function handleEventResizeStart(event, calendarEvent) {
+    event.stopPropagation();
+    dragClickRef.current = false;
+    setDragInfo({
+      type: 'resize',
+      event: calendarEvent,
+      originY: event.clientY,
+      initialDuration: Number(calendarEvent.duration_mins) || 60,
+      deltaMinutes: 0,
+    });
+  }
+
+  function handlePointerMove(event) {
+    if (!dragInfo) return;
+    event.preventDefault();
+    const deltaMinutes = Math.round(((event.clientY - dragInfo.originY) / CALENDAR_ROW_HEIGHT) * 60 / 15) * 15;
+    if (dragInfo.type === 'move') {
+      const [originalHour, originalMinutes] = dragInfo.initialStart.split(':').map((value) => Number(value || 0));
+      const totalMinutes = originalHour * 60 + originalMinutes + deltaMinutes;
+      const clampedMinutes = Math.max(0, Math.min(23 * 60 + 45, totalMinutes));
+      const newHour = Math.floor(clampedMinutes / 60);
+      const newMinute = clampedMinutes % 60;
+      const time = `${newHour.toString().padStart(2, '0')}:${newMinute.toString().padStart(2, '0')}`;
+      setScheduleForm((prev) => ({ ...prev, start_time: time, date: dragInfo.event.event_date }));
+      setDragInfo((prev) => ({ ...prev, deltaMinutes, originY: prev.originY }));
+      if (Math.abs(deltaMinutes) >= 5) dragClickRef.current = true;
+    } else if (dragInfo.type === 'resize') {
+      const newDuration = Math.max(15, dragInfo.initialDuration + deltaMinutes);
+      setScheduleForm((prev) => ({ ...prev, duration_mins: newDuration.toString() }));
+      setDragInfo((prev) => ({ ...prev, deltaMinutes }));
+      if (Math.abs(deltaMinutes) >= 5) dragClickRef.current = true;
+    }
+  }
+
+  useEffect(() => {
+    if (!dragInfo) return undefined;
+    const moveHandler = (event) => handlePointerMove(event);
+    const upHandler = () => {
+      handlePointerUp();
+    };
+    window.addEventListener('pointermove', moveHandler);
+    window.addEventListener('pointerup', upHandler);
+    return () => {
+      window.removeEventListener('pointermove', moveHandler);
+      window.removeEventListener('pointerup', upHandler);
+    };
+  }, [dragInfo]);
+
+  function handlePointerUp() {
+    if (!dragInfo) return;
+    const event = dragInfo.event;
+    setSelectedEvent(event);
+    setEventModalVisible(true);
+    setDragInfo(null);
   }
 
   function performanceFieldKey(eventId, exerciseId) {
@@ -931,8 +1127,8 @@ function App() {
         )}
 
         {activeTab === 'schedule' && (
-          <section className="schedule-layout">
-            <div className="schedule-header">
+          <section className="schedule-layout schedule-calendar-layout">
+            <div className="schedule-header schedule-calendar-header">
               <div className="view-tabs">
                 {['month', 'week', 'day'].map((view) => (
                   <button key={view} className={scheduleView === view ? 'active' : ''} onClick={() => setScheduleView(view)}>
@@ -941,93 +1137,199 @@ function App() {
                 ))}
               </div>
               <div className="schedule-actions">
-                <button className="primary-button" onClick={() => setEventModalVisible(true)}>Add event</button>
+                <button className="secondary-button today-button" onClick={() => setSelectedDate(new Date())}>Today</button>
+                <button className="primary-button add-event-button" onClick={() => openEventModal('work')}>
+                  <span className="button-icon">＋</span>
+                  Add event
+                </button>
               </div>
             </div>
 
-            <div className="schedule-grid">
-              <aside className="schedule-sidebar">
-                <div className="legend-card">
-                  <h3>Legend</h3>
-                  {eventTypeOptions.map((item) => (
-                    <div key={item.value} className="legend-item">
-                      <span className="legend-dot" style={{ background: eventColors[item.value] }} />
-                      <span>{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="sidebar-panel">
-                  <h3>Selected date</h3>
-                  <input type="date" value={currentDay} onChange={(e) => setSelectedDate(new Date(e.target.value))} />
-                  <div className="date-summary">
-                    <strong>{formatDateFull(selectedDate)}</strong>
-                    <span>{dayEvents.length} events</span>
+            <div className="schedule-calendar-body">
+              {scheduleView === 'month' && (
+                <div className="month-view">
+                  <div className="month-view-header">
+                    <button className="icon-button" onClick={() => changeMonth(-1)}>‹</button>
+                    <div className="month-title">{getMonthTitle(selectedDate)}</div>
+                    <button className="icon-button" onClick={() => changeMonth(1)}>›</button>
                   </div>
-                  <div className="action-column">
-                    {Object.keys(activeEventClasses).map((key) => (
-                      <button key={key} className="secondary-button" onClick={() => openEventModal(key)}>{key}</button>
+                  <div className="month-weekdays">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((weekday) => (
+                      <div key={weekday} className="weekday-label">{weekday}</div>
                     ))}
                   </div>
-                </div>
-              </aside>
-
-              <div className="schedule-main">
-                {scheduleView === 'month' && (
-                  <div className="calendar-grid">
+                  <div className="month-grid">
                     {monthGrid.map((week, weekIndex) => (
-                      <div key={weekIndex} className="calendar-row">
-                        {week.map((day) => (
-                          <div key={day.date} className={`calendar-cell ${day.active ? '' : 'disabled'} ${day.date === currentDay ? 'selected' : ''}`} onClick={() => setSelectedDate(new Date(day.date))}>
-                            <span>{day.label}</span>
-                            <div className="small-events">
-                              {events.filter((event) => event.event_date === day.date).slice(0, 2).map((event) => (
-                                <span key={event.id} className="event-chip" style={{ background: eventColors[event.event_type] }}>{event.title || event.event_type.replace(/ .*/, '')}</span>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
+                      <div key={weekIndex} className="month-row">
+                        {week.map((day) => {
+                          const dayEvents = events.filter((event) => event.event_date === day.date);
+                          return (
+                            <button
+                              key={day.date}
+                              type="button"
+                              className={`month-cell ${day.active ? '' : 'disabled'} ${day.date === currentDay ? 'selected' : ''}`}
+                              onClick={() => setSelectedDate(new Date(day.date))}
+                            >
+                              <div className="month-cell-top">
+                                <span>{day.label}</span>
+                                {day.date === currentDay && <span className="current-dot" />}
+                              </div>
+                              <div className="month-cell-events">
+                                {dayEvents.slice(0, 3).map((event) => (
+                                  <span key={event.id} className="event-chip" style={{ background: eventColors[event.event_type] }}>
+                                    {event.event_type.replace(/ .*/, '')}
+                                  </span>
+                                ))}
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                     ))}
                   </div>
-                )}
+                </div>
+              )}
 
-                {scheduleView === 'week' && (
-                  <div className="event-list">
-                    {Object.keys(getWeekRange(selectedDate)).length && [ ...Array(7).keys() ].map((offset) => {
-                      const date = addDays(weekViewRange.start, offset);
-                      const dayEventsForDate = events.filter((event) => event.event_date === date);
-                      return (
-                        <div key={date} className="day-block">
-                          <strong>{date}</strong>
-                          {dayEventsForDate.length ? dayEventsForDate.map((event) => (
-                            <button key={event.id} className="event-item" onClick={() => openEventDetails(event)}>
-                              <div>
-                                <strong>{event.title || event.event_type.replace(/ .*/, '')}</strong>
-                                <small>{event.start_time || 'Anytime'} · {event.duration_mins || '60'}m</small>
-                              </div>
-                              <span style={{ background: eventColors[event.event_type] }} className="status-pill small">{event.event_type.replace(/ .*/, '')}</span>
+              {scheduleView === 'week' && (
+                <div className="week-view">
+                  <div className="week-view-header schedule-nav-row">
+                    <button className="icon-button" onClick={() => changeWeek(-1)}>‹</button>
+                    <div className="schedule-view-title">{weekRangeLabel}</div>
+                    <button className="icon-button" onClick={() => changeWeek(1)}>›</button>
+                  </div>
+                  <div className="week-grid-wrapper" ref={weekGridRef}>
+                    <div className="week-grid week-calendar-grid">
+                      <div className="week-time-header" />
+                      {weekDates.map((day) => (
+                        <div key={day.date} className="week-day-header">
+                          <span>{day.weekday}</span>
+                          <strong>{day.label}</strong>
+                        </div>
+                      ))}
+                      {hourlyGrid.map((row) => (
+                        <React.Fragment key={`week-row-${row.hour}`}>
+                          <div className="week-time-cell">{row.label}</div>
+                          {weekDates.map((day) => (
+                            <button
+                              key={`${day.date}-${row.hour}`}
+                              type="button"
+                              className="week-grid-cell"
+                              onClick={(e) => handleCalendarCellClick(e, day.date)}
+                              data-hour={row.hour}
+                            />
+                          ))}
+                        </React.Fragment>
+                      ))}
+                      {weekDates.map((day, index) => (
+                        (eventsByDate[day.date] || []).map((event) => {
+                          const [startHour, startMinutes] = (event.start_time || '00:00').split(':').map(Number);
+                          const startTotal = startHour * 60 + (startMinutes || 0);
+                          const duration = Number(event.duration_mins) || 60;
+                          const top = (startTotal / 60) * CALENDAR_ROW_HEIGHT;
+                          const height = Math.max(30, (duration / 60) * CALENDAR_ROW_HEIGHT);
+                          const dragDelta = dragInfo?.event?.id === event.id ? dragInfo.deltaMinutes || 0 : 0;
+                          const offsetTop = dragInfo?.type === 'move' && dragInfo.event.id === event.id
+                            ? (dragDelta / 60) * CALENDAR_ROW_HEIGHT
+                            : 0;
+                          const resizeDelta = dragInfo?.type === 'resize' && dragInfo.event.id === event.id
+                            ? dragDelta
+                            : 0;
+                          return (
+                            <button
+                              key={event.id}
+                              type="button"
+                              className={`event-block week-event-block ${dragInfo?.event?.id === event.id ? 'dragging' : ''}`}
+                              style={{
+                                top: `${top + offsetTop}px`,
+                                height: `${Math.max(30, height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT)}px`,
+                                left: `calc(120px + (${index} * ((100% - 120px) / 7)) + 8px)`,
+                                width: `calc((100% - 120px) / 7 - 16px)`,
+                              }}
+                              onClick={(e) => {
+                                if (dragClickRef.current) {
+                                  dragClickRef.current = false;
+                                  return;
+                                }
+                                openEventEdit(event);
+                              }}
+                              onPointerDown={(e) => handleEventDragStart(e, event)}
+                            >
+                              <strong>{event.title || event.event_type.replace(/ .*/, '')}</strong>
+                              <small>{event.start_time || 'All day'}</small>
+                              <div className="resize-handle" onPointerDown={(e) => { e.stopPropagation(); handleEventResizeStart(e, event); }} />
                             </button>
-                          )) : <div className="empty-state">No events.</div>}
-                        </div>
-                      );
-                    })}
+                          );
+                        })
+                      ))}
+                    </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {scheduleView === 'day' && (
-                  <div className="event-list">
-                    {dayEvents.length ? dayEvents.map((event) => (
-                      <button key={event.id} className="event-item" onClick={() => openEventDetails(event)}>
-                        <div>
-                          <strong>{event.title || event.event_type.replace(/ .*/, '')}</strong>
-                          <small>{event.start_time || 'Anytime'} · {event.duration_mins || '60'}m</small>
-                        </div>
-                        <span style={{ background: eventColors[event.event_type] }} className="status-pill small">{event.event_type.replace(/ .*/, '')}</span>
-                      </button>
-                    )) : <div className="empty-state">No events for this day.</div>}
+              {scheduleView === 'day' && (
+                <div className="day-view">
+                  <div className="day-view-header schedule-nav-row">
+                    <button className="icon-button" onClick={() => changeDay(-1)}>‹</button>
+                    <div>
+                      <span className="day-title">{new Date(currentDay).toLocaleDateString(undefined, { weekday: 'long' })}</span>
+                      <strong>{formatDateFull(selectedDate)}</strong>
+                    </div>
+                    <button className="icon-button" onClick={() => changeDay(1)}>›</button>
                   </div>
-                )}
-              </div>
+                  <div className="day-grid-wrapper" ref={weekGridRef}>
+                    <div className="day-grid day-calendar-grid">
+                      {hourlyGrid.map((row) => (
+                        <React.Fragment key={`day-row-${row.hour}`}>
+                          <div className="day-time-cell">{row.label}</div>
+                          <button
+                            key={`${row.hour}-cell`}
+                            type="button"
+                            className="day-grid-cell"
+                            onClick={(e) => handleCalendarCellClick(e, currentDay)}
+                            data-hour={row.hour}
+                          />
+                        </React.Fragment>
+                      ))}
+                      <div className="day-grid-events">
+                        {(currentDayEvents || []).map((event) => {
+                          const [startHour, startMinutes] = (event.start_time || '00:00').split(':').map(Number);
+                          const startTotal = startHour * 60 + (startMinutes || 0);
+                          const duration = Number(event.duration_mins) || 60;
+                          const top = (startTotal / 60) * CALENDAR_ROW_HEIGHT;
+                          const height = Math.max(30, (duration / 60) * CALENDAR_ROW_HEIGHT);
+                          const dragDelta = dragInfo?.event?.id === event.id ? dragInfo.deltaMinutes || 0 : 0;
+                          const offsetTop = dragInfo?.type === 'move' && dragInfo.event.id === event.id
+                            ? (dragDelta / 60) * CALENDAR_ROW_HEIGHT
+                            : 0;
+                          const resizeDelta = dragInfo?.type === 'resize' && dragInfo.event.id === event.id
+                            ? dragDelta
+                            : 0;
+                          return (
+                            <button
+                              key={event.id}
+                              type="button"
+                              className={`event-block ${dragInfo?.event?.id === event.id ? 'dragging' : ''}`}
+                              style={{ top: `${top + offsetTop}px`, height: `${Math.max(30, height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT)}px` }}
+                              onClick={(e) => {
+                                if (dragClickRef.current) {
+                                  dragClickRef.current = false;
+                                  return;
+                                }
+                                openEventEdit(event);
+                              }}
+                              onPointerDown={(e) => handleEventDragStart(e, event)}
+                            >
+                              <strong>{event.title || event.event_type.replace(/ .*/, '')}</strong>
+                              <small>{event.start_time || 'All day'}</small>
+                              <div className="resize-handle" onPointerDown={(e) => handleEventResizeStart(e, event)} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}
