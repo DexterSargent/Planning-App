@@ -1,33 +1,5 @@
 """
 database.py — Single source of truth for Performance HQ's persistence layer.
-
-This replaces the old database.py and db_manager.py, which defined two
-different, incompatible `workouts` tables. Only this file should be
-imported going forward; db_manager.py can be deleted.
-
-Schema overview
-----------------
-Master libraries (things you build once, reuse forever):
-    ingredients        - reusable food items (kcal / cost per 100g)
-    exercises          - reusable exercise names + category
-
-Composed items (built from the libraries above):
-    recipes            + recipe_ingredients (junction, qty in grams)
-    workouts           + workout_exercises  (junction, sets/reps/weight)
-
-Planning:
-    calendar_events     - anything placed on the weekly calendar. Can
-                           optionally reference a recipe_id or workout_id
-                           so the calendar always reflects the master data.
-
-Analytics (what actually happened, not just what was planned):
-    body_logs           - bodyweight over time
-    lift_logs           - weight actually lifted for a given exercise/date,
-                           used to track 1RM / strength trends
-    nutrition_logs      - kcal/cost actually eaten on a given day
-
-All methods commit immediately and return plain Python types (lists of
-dicts, or the new row's id) so the UI layer never has to touch SQL.
 """
 
 import sqlite3
@@ -40,6 +12,7 @@ class DatabaseManager:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON;")
         self.create_tables()
+        self._seed_initial_data()
 
     # ------------------------------------------------------------------
     # Schema
@@ -96,7 +69,7 @@ class DatabaseManager:
                         exercise_id INTEGER NOT NULL,
                         sets INTEGER,
                         reps INTEGER,
-                        weight REAL,
+                        weight TEXT,
                         FOREIGN KEY(workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
                         FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE RESTRICT
                     )""")
@@ -130,7 +103,7 @@ class DatabaseManager:
                         id INTEGER PRIMARY KEY,
                         exercise_id INTEGER NOT NULL,
                         log_date TEXT NOT NULL,
-                        weight REAL NOT NULL,
+                        weight TEXT NOT NULL,
                         sets INTEGER,
                         reps INTEGER,
                         created_at TIMESTAMP,
@@ -146,6 +119,61 @@ class DatabaseManager:
                     )""")
 
         self.conn.commit()
+
+    def _seed_initial_data(self):
+        # Seed Toronto grocery items if none exist
+        if not self.get_all_ingredients():
+            groceries = [
+                ("Chicken Breast (Boneless Skinless)", 165, 1.80),
+                ("Extra Lean Ground Beef", 212, 1.95),
+                ("White Rice (Dry)", 360, 0.40),
+                ("Oats", 389, 0.50),
+                ("Broccoli", 34, 0.60),
+                ("Sweet Potato", 86, 0.45),
+                ("Eggs (Whole)", 143, 0.55),
+                ("Almonds", 579, 2.50),
+                ("Whole Milk", 61, 0.25),
+                ("Greek Yogurt (Plain)", 59, 0.70),
+                ("Olive Oil", 884, 1.50),
+                ("Whey Protein Powder", 379, 3.50),
+                ("Salmon Filet", 208, 3.20),
+                ("Banana", 89, 0.20),
+                ("Avocado", 160, 1.20),
+                ("Spinach", 23, 0.90),
+                ("Brown Rice (Dry)", 370, 0.45),
+                ("Peanut Butter", 588, 1.10),
+                ("Black Beans (Canned)", 132, 0.35),
+                ("Onion", 40, 0.30)
+            ]
+            for g in groceries:
+                self.add_ingredient(*g)
+
+        # Seed comprehensive exercises if none exist
+        if not self.get_all_exercises():
+            exs = [
+                ("Barbell Back Squat", "Legs"),
+                ("Barbell Front Squat", "Legs"),
+                ("Romanian Deadlift", "Legs"),
+                ("Conventional Deadlift", "Back/Legs"),
+                ("Barbell Bench Press", "Chest"),
+                ("Incline Dumbbell Press", "Chest"),
+                ("Overhead Press", "Shoulders"),
+                ("Pull Up", "Back"),
+                ("Barbell Row", "Back"),
+                ("Lat Pulldown", "Back"),
+                ("Dumbbell Bicep Curl", "Arms"),
+                ("Tricep Rope Pushdown", "Arms"),
+                ("Leg Press", "Legs"),
+                ("Leg Curl", "Legs"),
+                ("Leg Extension", "Legs"),
+                ("Calf Raise", "Legs"),
+                ("Power Clean", "Olympic"),
+                ("Snatch", "Olympic"),
+                ("Bulgarian Split Squat", "Legs"),
+                ("Nordic Curl", "Legs")
+            ]
+            for e, c in exs:
+                self.add_exercise(e, c)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -224,10 +252,6 @@ class DatabaseManager:
     # Recipes
     # ------------------------------------------------------------------
     def add_recipe(self, name, ingredient_list, time_to_cook_mins=0):
-        """
-        ingredient_list: list of dicts {ingredient_id, quantity_g}
-        Computes total_kcal / cost from the ingredients table automatically.
-        """
         total_kcal = 0.0
         total_cost = 0.0
         for item in ingredient_list:
@@ -275,10 +299,6 @@ class DatabaseManager:
         return self._rows_to_dicts(rows)
 
     def update_recipe(self, recipe_id, name, ingredient_list, time_to_cook_mins=0):
-        """
-        Replaces the recipe's ingredient list and recalculates totals, in place.
-        ingredient_list: list of dicts {ingredient_id, quantity_g}
-        """
         total_kcal = 0.0
         total_cost = 0.0
         for item in ingredient_list:
@@ -303,7 +323,6 @@ class DatabaseManager:
         return recipe_id
 
     def delete_recipe(self, recipe_id):
-        # Cascade: any calendar event planning this recipe no longer makes sense once it's gone.
         self.conn.execute("DELETE FROM calendar_events WHERE ref_recipe_id = ?", (recipe_id,))
         self.conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
         self.conn.commit()
@@ -312,10 +331,6 @@ class DatabaseManager:
     # Workouts
     # ------------------------------------------------------------------
     def add_workout(self, name, exercise_list, duration_mins=None):
-        """
-        exercise_list: list of dicts {exercise_id, sets, reps, weight}
-        If duration_mins isn't given, estimate ~3 mins/set as a placeholder.
-        """
         if duration_mins is None:
             duration_mins = sum((e.get("sets") or 0) for e in exercise_list) * 3
 
@@ -356,10 +371,6 @@ class DatabaseManager:
         return self._rows_to_dicts(rows)
 
     def update_workout(self, workout_id, name, exercise_list, duration_mins=None):
-        """
-        Replaces the workout's exercise list in place.
-        exercise_list: list of dicts {exercise_id, sets, reps, weight}
-        """
         if duration_mins is None:
             duration_mins = sum((e.get("sets") or 0) for e in exercise_list) * 3
 
@@ -377,7 +388,6 @@ class DatabaseManager:
         return workout_id
 
     def delete_workout(self, workout_id):
-        # Cascade: any calendar event planning this workout no longer makes sense once it's gone.
         self.conn.execute("DELETE FROM calendar_events WHERE ref_workout_id = ?", (workout_id,))
         self.conn.execute("DELETE FROM workouts WHERE id = ?", (workout_id,))
         self.conn.commit()
@@ -398,7 +408,6 @@ class DatabaseManager:
         return cur.lastrowid
 
     def get_events_for_range(self, start_date, end_date):
-        """start_date / end_date are 'YYYY-MM-DD' strings, inclusive."""
         rows = self.conn.execute(
             "SELECT * FROM calendar_events WHERE event_date BETWEEN ? AND ? ORDER BY event_date, start_time",
             (start_date, end_date),
@@ -416,7 +425,6 @@ class DatabaseManager:
         return dict(row) if row else None
 
     def get_next_training_event(self, from_date=None):
-        """Soonest upcoming Training Session event (today or later) that references a workout."""
         from_date = from_date or date.today().isoformat()
         row = self.conn.execute(
             """SELECT * FROM calendar_events
@@ -463,7 +471,7 @@ class DatabaseManager:
         log_date = log_date or date.today().isoformat()
         cur = self.conn.execute(
             "INSERT INTO lift_logs (exercise_id, log_date, weight, sets, reps, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (exercise_id, log_date, weight, sets, reps, datetime.now().isoformat()),
+            (exercise_id, log_date, str(weight), sets, reps, datetime.now().isoformat()),
         )
         self.conn.commit()
         return cur.lastrowid
@@ -476,15 +484,24 @@ class DatabaseManager:
         return list(reversed(self._rows_to_dicts(rows)))
 
     def get_current_1rm_estimate(self, exercise_id):
-        """Rough Epley estimate from the most recent lift log, or None."""
         row = self.conn.execute(
-            "SELECT * FROM lift_logs WHERE exercise_id = ? ORDER BY log_date DESC, id DESC LIMIT 1",
+            "SELECT weight, reps FROM lift_logs WHERE exercise_id = ? ORDER BY log_date DESC, id DESC LIMIT 1",
             (exercise_id,),
         ).fetchone()
         if not row:
             return None
-        w, reps = row["weight"], row["reps"] or 1
+        try:
+            w_str = str(row["weight"]).replace('/', ',')
+            weights = [float(x.strip()) for x in w_str.split(',') if x.strip()]
+            w = max(weights) if weights else 0.0
+        except ValueError:
+            return None
+        reps = row["reps"] or 1
         return round(w * (1 + reps / 30.0), 1)
+
+    def delete_lift_log(self, log_id):
+        self.conn.execute("DELETE FROM lift_logs WHERE id = ?", (log_id,))
+        self.conn.commit()
 
     def log_nutrition(self, kcal, cost=None, log_date=None):
         log_date = log_date or date.today().isoformat()
@@ -504,21 +521,17 @@ class DatabaseManager:
     def close(self):
         self.conn.close()
 
-
 if __name__ == "__main__":
-    # Quick smoke test when run directly: python database.py
     db = DatabaseManager(":memory:")
-    ing_id = db.add_ingredient("Extra Lean Ground Beef", kcal_per_100g=212, cost_per_100g=1.30)
-    ex_id = db.add_exercise("Barbell Back Squat", category="Legs")
+    ing_id = db.add_ingredient("Extra Lean Ground Beef Test", kcal_per_100g=212, cost_per_100g=1.30)
+    ex_id = db.add_exercise("Barbell Back Squat Test", category="Legs")
     recipe_id = db.add_recipe("Post-Workout Beef Bowl", [{"ingredient_id": ing_id, "quantity_g": 250}], time_to_cook_mins=20)
-    workout_id = db.add_workout("Lower Body Power", [{"exercise_id": ex_id, "sets": 4, "reps": 5, "weight": 315}])
+    workout_id = db.add_workout("Lower Body Power", [{"exercise_id": ex_id, "sets": 4, "reps": 5, "weight": "315"}], 60)
     db.add_calendar_event("Lower Body Power", "Training Session", date.today().isoformat(), "14:00", 75, ref_workout_id=workout_id)
     db.log_bodyweight(212.4)
-    db.log_lift(ex_id, weight=315, sets=4, reps=5)
+    db.log_lift(ex_id, weight="315, 325", sets=4, reps=5)
     print("Recipes:", db.get_all_recipes())
-    print("Recipe ingredients:", db.get_recipe_ingredients(recipe_id))
     print("Workouts:", db.get_all_workouts())
-    print("Workout exercises:", db.get_workout_exercises(workout_id))
     print("Events today:", db.get_events_for_day(date.today().isoformat()))
     print("1RM estimate:", db.get_current_1rm_estimate(ex_id))
     print("Smoke test passed.")

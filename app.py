@@ -85,8 +85,8 @@ class FootballApp(ctk.CTk):
     def show_home_view(self):
         self.reset_main_frame()
         self.main_frame.grid_columnconfigure(0, weight=1)
-        self.main_frame.grid_rowconfigure(0, weight=0)   # banner strip (~5%)
-        self.main_frame.grid_rowconfigure(1, weight=1)   # workout logger + meals (~95%, split 75/20)
+        self.main_frame.grid_rowconfigure(0, weight=0)
+        self.main_frame.grid_rowconfigure(1, weight=1)
 
         # ---- 5%: unscheduled-time banner ----
         self.home_banner = ctk.CTkFrame(self.main_frame, fg_color="#1A242F", corner_radius=8, height=42)
@@ -99,8 +99,8 @@ class FootballApp(ctk.CTk):
         body = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         body.grid(row=1, column=0, padx=20, pady=(0, 20), sticky="nsew")
         body.grid_rowconfigure(0, weight=1)
-        body.grid_columnconfigure(0, weight=75)  # workout logger ≈ 75%
-        body.grid_columnconfigure(1, weight=20)  # meal list ≈ 20%
+        body.grid_columnconfigure(0, weight=75)
+        body.grid_columnconfigure(1, weight=20)
 
         # ---- 75%: today's workout logging interface ----
         self.workout_logger_panel = ctk.CTkFrame(body, corner_radius=12, border_width=1, border_color=ACCENT)
@@ -112,9 +112,7 @@ class FootballApp(ctk.CTk):
         self.meals_panel.grid(row=0, column=1, sticky="nsew")
         self.render_home_meals_panel()
 
-    # ---- Home: 5% banner ----
     def refresh_free_time_banner(self):
-        """Unscheduled minutes between 06:00 and 24:00 today, based on scheduled event durations."""
         today_str = date.today().isoformat()
         WINDOW_START_MIN = 6 * 60
         WINDOW_END_MIN = 24 * 60
@@ -129,7 +127,6 @@ class FootballApp(ctk.CTk):
                 continue
             dur = ev["duration_mins"] or 30
             end_min = start_min + dur
-            # Clip the event to the 6am-midnight window before counting it
             clipped_start = max(start_min, WINDOW_START_MIN)
             clipped_end = min(end_min, WINDOW_END_MIN)
             if clipped_end > clipped_start:
@@ -139,7 +136,6 @@ class FootballApp(ctk.CTk):
         hrs, mins = divmod(free_minutes, 60)
         self.lbl_free_time.configure(text=f"🕒 {hrs}h {mins}m unscheduled between 6:00 AM – 12:00 AM today")
 
-    # ---- Home: 75% workout logger ----
     def render_workout_logger(self):
         for w in self.workout_logger_panel.winfo_children():
             w.destroy()
@@ -171,7 +167,7 @@ class FootballApp(ctk.CTk):
         subtitle.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="w")
 
         exercises = self.db.get_workout_exercises(workout["id"])
-        self._logger_exercise_entries = []  # [{exercise_id, sets, reps, weight_entry, reps_entry}]
+        self._logger_exercise_entries = []
 
         scroll = ctk.CTkScrollableFrame(self.workout_logger_panel, fg_color="transparent")
         scroll.grid(row=2, column=0, padx=20, pady=(0, 10), sticky="nsew")
@@ -186,14 +182,28 @@ class FootballApp(ctk.CTk):
             row.grid_columnconfigure(0, weight=1)
 
             ctk.CTkLabel(row, text=ex["name"], font=ctk.CTkFont(size=14, weight="bold")).grid(row=0, column=0, padx=15, pady=(10, 2), sticky="w")
-            planned = f"Planned: {ex['sets'] or '-'} sets x {ex['reps'] or '-'} reps @ {ex['weight'] if ex['weight'] is not None else '-'}"
+            planned = f"Planned: {ex['sets'] or '-'} sets x {ex['reps'] or '-'} reps @ {ex['weight'] if ex['weight'] else '-'}"
             ctk.CTkLabel(row, text=planned, font=ctk.CTkFont(size=11), text_color="gray").grid(row=1, column=0, padx=15, pady=(0, 10), sticky="w")
 
             entry_frame = ctk.CTkFrame(row, fg_color="transparent")
             entry_frame.grid(row=0, column=1, rowspan=2, padx=15, pady=10, sticky="e")
             ctk.CTkLabel(entry_frame, text="Weight lifted:", font=ctk.CTkFont(size=11)).grid(row=0, column=0, padx=(0, 5))
-            weight_entry = ctk.CTkEntry(entry_frame, width=80, placeholder_text=str(ex["weight"]) if ex["weight"] is not None else "lbs")
+            
+            raw_weight = str(ex["weight"]) if ex["weight"] else ""
+            ph_weight = "lbs"
+            if raw_weight and raw_weight != "None":
+                try:
+                    w_float = float(raw_weight)
+                    if w_float.is_integer():
+                        ph_weight = f"{int(w_float)} lbs"
+                    else:
+                        ph_weight = f"{w_float} lbs"
+                except ValueError:
+                    ph_weight = raw_weight
+
+            weight_entry = ctk.CTkEntry(entry_frame, width=80, placeholder_text=ph_weight)
             weight_entry.grid(row=0, column=1, padx=(0, 10))
+            
             ctk.CTkLabel(entry_frame, text="Reps:", font=ctk.CTkFont(size=11)).grid(row=0, column=2, padx=(0, 5))
             reps_entry = ctk.CTkEntry(entry_frame, width=50, placeholder_text=str(ex["reps"]) if ex["reps"] is not None else "")
             reps_entry.grid(row=0, column=3)
@@ -214,29 +224,20 @@ class FootballApp(ctk.CTk):
         today_str = date.today().isoformat()
         for item in getattr(self, "_logger_exercise_entries", []):
             raw_weight = item["weight_entry"].get().strip()
-            weight_val = None
-            if raw_weight:
-                try:
-                    weight_val = float(raw_weight)
-                except ValueError:
-                    weight_val = None
-            if weight_val is None:
-                weight_val = item["weight"]  # fall back to planned target
-            if weight_val is None:
-                continue  # nothing usable to log for this exercise
+            weight_val = raw_weight if raw_weight else str(item["weight"])
+            if not weight_val or weight_val == "None":
+                continue
 
             raw_reps = item["reps_entry"].get().strip()
             reps_val = int(raw_reps) if raw_reps.isdigit() else item["reps"]
 
             self.db.log_lift(item["exercise_id"], weight_val, sets=item["sets"], reps=reps_val, log_date=today_str)
 
-        # The planned session is done — remove it so the dashboard surfaces the next one.
         self.db.delete_calendar_event(event_id)
         self.lbl_logger_status.configure(text="Workout logged. Nice work.", text_color=GOOD)
         self.render_workout_logger()
         self.refresh_free_time_banner()
 
-    # ---- Home: 20% today's meals ----
     def render_home_meals_panel(self):
         for w in self.meals_panel.winfo_children():
             w.destroy()
@@ -293,7 +294,6 @@ class FootballApp(ctk.CTk):
         tab_view.grid_columnconfigure(0, weight=1)
         tab_view.grid_rowconfigure(1, weight=1)
 
-        # Reset the recipe-in-progress every time this view is (re)built
         self.current_recipe_ingredients = []
 
         # ---------------- Tab 1: Create Recipe ----------------
@@ -412,7 +412,7 @@ class FootballApp(ctk.CTk):
             self.lbl_diet_status.configure(text=f"No ingredient matching '{name_query}'. Register it on the right first.")
             return
 
-        ing = matches[0]  # take best/first match
+        ing = matches[0]
         factor = qty / 100.0
         self.current_recipe_ingredients.append({
             "ingredient_id": ing["id"],
@@ -542,8 +542,11 @@ class FootballApp(ctk.CTk):
         name_frame = ctk.CTkFrame(builder_panel, fg_color="transparent")
         name_frame.grid(row=1, column=0, padx=15, pady=5, sticky="ew")
         name_frame.grid_columnconfigure(0, weight=1)
-        self.entry_workout_name = ctk.CTkEntry(name_frame, placeholder_text="Enter Workout Name (e.g., Lower Body Power - Phase 1)")
-        self.entry_workout_name.grid(row=0, column=0, sticky="ew")
+        self.entry_workout_name = ctk.CTkEntry(name_frame, placeholder_text="Enter Workout Name (e.g., Lower Body Power)")
+        self.entry_workout_name.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+
+        self.entry_workout_duration = ctk.CTkEntry(name_frame, width=120, placeholder_text="Duration (mins)")
+        self.entry_workout_duration.grid(row=0, column=1, sticky="e")
 
         self.workout_sandbox_scroll = ctk.CTkScrollableFrame(builder_panel, label_text="Exercises in Workout")
         self.workout_sandbox_scroll.grid(row=2, column=0, padx=15, pady=10, sticky="nsew")
@@ -633,11 +636,6 @@ class FootballApp(ctk.CTk):
 
     def get_exercise_names(self, seed_if_empty=False):
         exercises = self.db.get_all_exercises()
-        if not exercises and seed_if_empty:
-            # Give a first-time user a starting library instead of an empty dropdown
-            for name in ["Barbell Back Squat", "Deadlift", "Bench Press", "Power Clean", "Nordic Curl"]:
-                self.db.add_exercise(name)
-            exercises = self.db.get_all_exercises()
         return [e["name"] for e in exercises]
 
     def render_workout_sandbox(self):
@@ -707,14 +705,15 @@ class FootballApp(ctk.CTk):
 
         exercise_list = []
         for ex in self.current_workout_exercises:
-            try:
-                weight_val = float(str(ex["weight"]).rstrip("%lbs "))
-            except ValueError:
-                weight_val = None
+            weight_val = str(ex["weight"]).strip()
             exercise_list.append({"exercise_id": ex["exercise_id"], "sets": ex["sets"], "reps": ex["reps"], "weight": weight_val})
 
-        self.db.add_workout(name, exercise_list)
+        dur_str = self.entry_workout_duration.get().strip()
+        duration_mins = int(dur_str) if dur_str.isdigit() else None
+
+        self.db.add_workout(name, exercise_list, duration_mins)
         self.entry_workout_name.delete(0, "end")
+        self.entry_workout_duration.delete(0, "end")
         self.current_workout_exercises = []
         self.render_workout_sandbox()
         self.lbl_train_status.configure(text=f"'{name}' saved to Workout Database.", text_color=GOOD)
@@ -724,31 +723,58 @@ class FootballApp(ctk.CTk):
         exercise = self.db.get_exercise_by_name(exercise_name)
         for w in self.vault_history_scroll.winfo_children():
             w.destroy()
+            
         if not exercise:
             self.lbl_1rm.configure(text="No logs yet")
+            if hasattr(self, "lbl_1rm_perc") and self.lbl_1rm_perc.winfo_exists():
+                self.lbl_1rm_perc.configure(text="")
             return
+        
+        onerm_box = self.lbl_1rm.master
         estimate = self.db.get_current_1rm_estimate(exercise["id"])
-        self.lbl_1rm.configure(text=f"{estimate} lbs" if estimate else "No logs yet")
+        
+        if estimate:
+            self.lbl_1rm.configure(text=f"{estimate} lbs")
+            perc_text = f"65%: {int(estimate*0.65)} lbs | 75%: {int(estimate*0.75)} lbs | 85%: {int(estimate*0.85)} lbs | 95%: {int(estimate*0.95)} lbs"
+            
+            # CHECK ADDED HERE: Ensure the widget still exists in the active frame
+            if not hasattr(self, "lbl_1rm_perc") or not self.lbl_1rm_perc.winfo_exists():
+                self.lbl_1rm_perc = ctk.CTkLabel(onerm_box, text="", font=ctk.CTkFont(size=11), text_color="lightgray")
+                self.lbl_1rm_perc.grid(row=3, column=0, pady=(0, 10))
+                
+            self.lbl_1rm_perc.configure(text=perc_text)
+        else:
+            self.lbl_1rm.configure(text="No logs yet")
+            # CHECK ADDED HERE: Ensure the widget still exists before clearing it
+            if hasattr(self, "lbl_1rm_perc") and self.lbl_1rm_perc.winfo_exists():
+                self.lbl_1rm_perc.configure(text="")
 
         history = list(reversed(self.db.get_lift_history(exercise["id"], limit=20)))
         if not history:
             ctk.CTkLabel(self.vault_history_scroll, text="No lifts logged for this exercise yet.", text_color="gray").grid(row=0, column=0, padx=5, pady=8)
             return
+            
         for idx, h in enumerate(history):
             h_card = ctk.CTkFrame(self.vault_history_scroll, fg_color="#2B2B2B")
             h_card.grid(row=idx, column=0, padx=5, pady=4, sticky="ew")
-            ctk.CTkLabel(h_card, text=h["log_date"], font=ctk.CTkFont(size=12, weight="bold"), text_color=ACCENT).pack(anchor="w", padx=10, pady=(4, 1))
+            h_card.grid_columnconfigure(0, weight=1)
+            ctk.CTkLabel(h_card, text=h["log_date"], font=ctk.CTkFont(size=12, weight="bold"), text_color=ACCENT).grid(row=0, column=0, sticky="w", padx=10, pady=(4, 1))
             det = f"{h['sets'] or '-'}x{h['reps'] or '-'} @ {h['weight']} lbs"
-            ctk.CTkLabel(h_card, text=det, font=ctk.CTkFont(size=11)).pack(anchor="w", padx=10, pady=(1, 4))
+            ctk.CTkLabel(h_card, text=det, font=ctk.CTkFont(size=11)).grid(row=1, column=0, sticky="w", padx=10, pady=(1, 4))
+            ctk.CTkButton(h_card, text="✕", width=28, fg_color="#5A1F1F", hover_color="#7A2727",
+                          command=lambda hid=h["id"]: self.delete_lift_and_refresh(hid, exercise_name)).grid(row=0, column=1, rowspan=2, padx=(0, 10))
+
+    def delete_lift_and_refresh(self, log_id, exercise_name):
+        self.db.delete_lift_log(log_id)
+        self.refresh_vault(exercise_name)
 
     def log_lift_entry(self):
         exercise_name = self.vault_drop.get()
         exercise = self.db.get_exercise_by_name(exercise_name)
         if not exercise:
             return
-        try:
-            weight = float(self.entry_log_weight.get().strip())
-        except ValueError:
+        weight = self.entry_log_weight.get().strip()
+        if not weight:
             return
         sets = self.entry_log_sets.get().strip()
         reps = self.entry_log_reps.get().strip()
@@ -819,8 +845,29 @@ class FootballApp(ctk.CTk):
         self.cal_container.grid_rowconfigure(0, weight=1)
 
         self.cal_canvas = tk.Canvas(self.cal_container, bg=BG, highlightthickness=0)
-        self.cal_canvas.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.vbar = ctk.CTkScrollbar(self.cal_container, orientation="vertical", command=self.cal_canvas.yview)
+        self.cal_canvas.configure(yscrollcommand=self.vbar.set)
+        
+        self.cal_canvas.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=10)
+        self.vbar.grid(row=0, column=1, sticky="ns", padx=(0, 10), pady=10)
         self.cal_canvas.bind("<Configure>", lambda e: self.render_active_calendar())
+
+        def _on_mousewheel(event):
+            if hasattr(event, 'delta') and event.delta:
+                self.cal_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            else:
+                if event.num == 4:
+                    self.cal_canvas.yview_scroll(-1, "units")
+                elif event.num == 5:
+                    self.cal_canvas.yview_scroll(1, "units")
+
+        self.cal_canvas.bind("<Enter>", lambda e: self.cal_canvas.bind_all("<MouseWheel>", _on_mousewheel) or 
+                                                  self.cal_canvas.bind_all("<Button-4>", _on_mousewheel) or 
+                                                  self.cal_canvas.bind_all("<Button-5>", _on_mousewheel))
+        self.cal_canvas.bind("<Leave>", lambda e: self.cal_canvas.unbind_all("<MouseWheel>") or 
+                                                  self.cal_canvas.unbind_all("<Button-4>") or 
+                                                  self.cal_canvas.unbind_all("<Button-5>"))
+
         self.render_active_calendar()
 
     def shift_cal_anchor(self, direction):
@@ -833,7 +880,6 @@ class FootballApp(ctk.CTk):
         self.render_active_calendar()
 
     def open_add_event_modal(self):
-        """Opens a popup modal window to create a new calendar event with dynamic fields"""
         modal = ctk.CTkToplevel(self)
         modal.title("Add New Schedule Event")
         modal.geometry("480x650")
@@ -870,23 +916,32 @@ class FootballApp(ctk.CTk):
                                   command=lambda: self.save_calendar_event(modal))
         btn_save.pack(fill="x", padx=25, pady=10)
 
-        # Initialize default view
         self.update_dynamic_modal_fields(self.event_types[0])
 
     def auto_update_workout_duration(self, selected_workout_name):
-        """Finds the selected workout in the database and auto-fills its stored duration"""
         workout = next((row for row in self.db.get_all_workouts() if row["name"] == selected_workout_name), None)
-        if workout and hasattr(self, "dyn_val_duration") and self.dyn_val_duration.winfo_exists():
-            self.dyn_val_duration.delete(0, "end")
-            self.dyn_val_duration.insert(0, str(workout["duration_mins"]))
+        if workout:
+            if hasattr(self, "dyn_val_duration") and self.dyn_val_duration.winfo_exists():
+                self.dyn_val_duration.delete(0, "end")
+                self.dyn_val_duration.insert(0, str(workout["duration_mins"]))
+            current_title = self.entry_ev_title.get().strip()
+            if not current_title or current_title == getattr(self, "_last_auto_title", ""):
+                self.entry_ev_title.delete(0, "end")
+                self.entry_ev_title.insert(0, selected_workout_name)
+                self._last_auto_title = selected_workout_name
 
     def auto_update_meal_kcal(self, selected_recipe_name):
         recipe = next((r for r in self.db.get_all_recipes() if r["name"] == selected_recipe_name), None)
-        if recipe and hasattr(self, "lbl_meal_kcal_preview"):
-            self.lbl_meal_kcal_preview.configure(text=f"{recipe['total_kcal']:.0f} kcal • ${recipe['cost']:.2f}")
+        if recipe:
+            if hasattr(self, "lbl_meal_kcal_preview"):
+                self.lbl_meal_kcal_preview.configure(text=f"{recipe['total_kcal']:.0f} kcal • ${recipe['cost']:.2f}")
+            current_title = self.entry_ev_title.get().strip()
+            if not current_title or current_title == getattr(self, "_last_auto_title", ""):
+                self.entry_ev_title.delete(0, "end")
+                self.entry_ev_title.insert(0, selected_recipe_name)
+                self._last_auto_title = selected_recipe_name
 
     def update_dynamic_modal_fields(self, selected_type):
-        """Clears and rebuilds the input fields based on the selected event category"""
         for widget in self.dynamic_fields_frame.winfo_children():
             widget.destroy()
 
@@ -984,7 +1039,6 @@ class FootballApp(ctk.CTk):
             r = next((row for row in self.db.get_all_recipes() if row["name"] == self.dyn_val_1.get()), None)
             if r:
                 ref_recipe_id = r["id"]
-                # A planned meal also counts as consumed nutrition for analytics purposes
                 self.db.log_nutrition(r["total_kcal"], cost=r["cost"], log_date=event_date_raw)
 
         self.db.add_calendar_event(title_text, event_type, event_date_raw, start_time, duration,
@@ -992,7 +1046,6 @@ class FootballApp(ctk.CTk):
         modal.destroy()
         self.render_active_calendar()
 
-    # --- CALENDAR DRAWING CORE ---
     def switch_cal_view(self, view_name):
         self.current_cal_view = view_name
         self.show_calendar_view()
@@ -1038,6 +1091,30 @@ class FootballApp(ctk.CTk):
         except (ValueError, AttributeError):
             return start_y
 
+    def _scroll_to_morning(self, row_height):
+        earliest_hour = 8.0
+        events = []
+        if self.current_cal_view == "Day":
+            events = self.db.get_events_for_day(self.current_cal_anchor.isoformat())
+        elif self.current_cal_view == "Week":
+            week_start = self.current_cal_anchor - timedelta(days=self.current_cal_anchor.weekday())
+            events = self.db.get_events_for_range(week_start.isoformat(), (week_start + timedelta(days=6)).isoformat())
+
+        for ev in events:
+            if ev["start_time"]:
+                try:
+                    hh, mm = map(int, ev["start_time"].split(":"))
+                    hr = hh + mm / 60.0
+                    if hr < earliest_hour:
+                        earliest_hour = hr
+                except ValueError:
+                    pass
+
+        target_y = 40 + (earliest_hour * row_height)
+        total_h = 40 + (24 * row_height)
+        fraction = max(0.0, (target_y - 20) / total_h)
+        self.after(50, lambda: self.cal_canvas.yview_moveto(fraction))
+
     def draw_day_grid(self, w, h):
         row_height = 40
         start_x = 60
@@ -1057,6 +1134,7 @@ class FootballApp(ctk.CTk):
             self._draw_event_block(start_x + 4, y, (w - 20 - start_x) - 8, height, ev)
 
         self.cal_canvas.config(scrollregion=(0, 0, w, start_y + (24 * row_height)))
+        self._scroll_to_morning(row_height)
 
     def draw_week_grid(self, w, h):
         days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -1089,6 +1167,7 @@ class FootballApp(ctk.CTk):
             self._draw_event_block(x, y, col_width - 4, height, ev)
 
         self.cal_canvas.config(scrollregion=(0, 0, w, start_y + (24 * row_height)))
+        self._scroll_to_morning(row_height)
 
     def draw_month_grid(self, w, h):
         days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -1110,14 +1189,13 @@ class FootballApp(ctk.CTk):
             x_pos = start_x + (col * col_width)
             self.cal_canvas.create_line(x_pos, start_y, x_pos, start_y + (5 * row_height), fill="#3A3A3A")
 
-        # Pull the whole month's events once, then bucket by day for the dot indicators
         month_end = (first_of_month.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
         month_events = self.db.get_events_for_range(first_of_month.isoformat(), month_end.isoformat())
         events_by_day = {}
         for ev in month_events:
             events_by_day.setdefault(ev["event_date"], []).append(ev)
 
-        lead_blank = first_of_month.weekday()  # Monday = 0
+        lead_blank = first_of_month.weekday()
         day_num = 1
         days_in_month = month_end.day
         for row in range(5):
@@ -1209,6 +1287,30 @@ class FootballApp(ctk.CTk):
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True, padx=5, pady=5)
 
+    def _add_hover_annotation(self, ax, fig, elements, dates, y_values, y_label):
+        annot = ax.annotate("", xy=(0,0), xytext=(-20,20), textcoords="offset points",
+                            bbox=dict(boxstyle="round", fc="#1F6AA5", ec="white", lw=1),
+                            arrowprops=dict(arrowstyle="->", color="white"), color="white")
+        annot.set_visible(False)
+
+        def hover(event):
+            if event.inaxes == ax:
+                if event.xdata is not None and event.ydata is not None:
+                    idx = int(round(event.xdata))
+                    if 0 <= idx < len(dates):
+                        y_val = y_values[idx]
+                        if abs(event.ydata - y_val) < (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.15:
+                            annot.xy = (idx, y_val)
+                            annot.set_text(f"{y_val} {y_label}\n{dates[idx]}")
+                            annot.set_visible(True)
+                            fig.canvas.draw_idle()
+                            return
+                if annot.get_visible():
+                    annot.set_visible(False)
+                    fig.canvas.draw_idle()
+
+        fig.canvas.mpl_connect("motion_notify_event", hover)
+
     def render_bodyweight_chart(self):
         history = self.db.get_bodyweight_history()
         fig, ax = self._make_dark_figure()
@@ -1217,10 +1319,13 @@ class FootballApp(ctk.CTk):
             weights = [h["weight_lbs"] for h in history]
             ax.plot(dates, weights, color=GOOD, marker="o", linewidth=2)
             ax.set_title("Bodyweight Over Time")
-            ax.set_ylabel("lbs")
+            ax.set_xlabel("Date")
+            ax.set_ylabel("Bodyweight (lbs)")
             step = max(len(dates) // 8, 1)
-            ax.set_xticks(dates[::step])
+            ax.set_xticks(range(0, len(dates), step))
+            ax.set_xticklabels([dates[i] for i in range(0, len(dates), step)])
             ax.tick_params(axis="x", rotation=45)
+            self._add_hover_annotation(ax, fig, [], dates, weights, "lbs")
         else:
             ax.text(0.5, 0.5, "No bodyweight logs yet", color="gray", ha="center", va="center", transform=ax.transAxes)
         fig.tight_layout()
@@ -1241,13 +1346,24 @@ class FootballApp(ctk.CTk):
         history = self.db.get_lift_history(exercise["id"]) if exercise else []
         if history:
             dates = [h["log_date"] for h in history]
-            weights = [h["weight"] for h in history]
-            ax.plot(dates, weights, color=ACCENT, marker="o", linewidth=2)
-            ax.set_title(f"{exercise_name} — Weight Logged Over Time")
-            ax.set_ylabel("lbs")
+            max_weights_per_log = []
+            for h in history:
+                w_str = str(h["weight"]).replace('/', ',')
+                try:
+                    w_max = max(float(x.strip()) for x in w_str.split(',') if x.strip())
+                except ValueError:
+                    w_max = 0
+                max_weights_per_log.append(w_max)
+                
+            ax.plot(dates, max_weights_per_log, color=ACCENT, marker="o", linewidth=2)
+            ax.set_title(f"{exercise_name} — Max Weight Logged")
+            ax.set_xlabel("Date")
+            ax.set_ylabel("Weight (lbs)")
             step = max(len(dates) // 8, 1)
-            ax.set_xticks(dates[::step])
+            ax.set_xticks(range(0, len(dates), step))
+            ax.set_xticklabels([dates[i] for i in range(0, len(dates), step)])
             ax.tick_params(axis="x", rotation=45)
+            self._add_hover_annotation(ax, fig, [], dates, max_weights_per_log, "lbs")
         else:
             ax.text(0.5, 0.5, "No lifts logged for this exercise yet", color="gray", ha="center", va="center", transform=ax.transAxes)
         fig.tight_layout()
@@ -1262,15 +1378,20 @@ class FootballApp(ctk.CTk):
             ax.bar(dates, kcal, color=ACCENT)
             ax.axhline(3800, color="orange", linestyle="--", linewidth=1, label="Target")
             ax.set_title("Daily Nutrition (kcal) — from planned meal events")
-            ax.set_ylabel("kcal")
+            ax.set_xlabel("Date")
+            ax.set_ylabel("Calories (kcal)")
             ax.legend(facecolor=BG, labelcolor="lightgray")
             step = max(len(dates) // 8, 1)
-            ax.set_xticks(dates[::step])
+            ax.set_xticks(range(0, len(dates), step))
+            ax.set_xticklabels([dates[i] for i in range(0, len(dates), step)])
             ax.tick_params(axis="x", rotation=45)
+            self._add_hover_annotation(ax, fig, [], dates, kcal, "kcal")
         else:
             ax.text(0.5, 0.5, "No meals logged yet — add a Meal/Nutrition event\nfrom the Schedule tab", color="gray", ha="center", va="center", transform=ax.transAxes)
         fig.tight_layout()
         self._embed_figure(fig, self.food_chart_frame)
+
+    
 
 
 if __name__ == "__main__":
