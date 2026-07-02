@@ -22,6 +22,22 @@ function formatDate(date) {
   return d.toISOString().slice(0, 10);
 }
 
+function getOrdinal(day) {
+  if (day % 100 >= 11 && day % 100 <= 13) return 'th';
+  if (day % 10 === 1) return 'st';
+  if (day % 10 === 2) return 'nd';
+  if (day % 10 === 3) return 'rd';
+  return 'th';
+}
+
+function formatDateFull(date) {
+  const d = new Date(date);
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const day = d.getDate();
+  return `${days[d.getDay()]}, ${months[d.getMonth()]} ${day}${getOrdinal(day)}, ${d.getFullYear()}`;
+}
+
 function addDays(isoDate, days) {
   const d = new Date(`${isoDate}T00:00:00`);
   d.setDate(d.getDate() + days);
@@ -96,6 +112,7 @@ function App() {
   const [selectedEvent, setSelectedEvent] = useState(null);
 
   const [statusMessage, setStatusMessage] = useState('');
+  const [theme, setTheme] = useState('light');
 
   const [exerciseForm, setExerciseForm] = useState({ name: '', category: '', one_rm: '' });
   const [ingredientForm, setIngredientForm] = useState({ name: '', kcal: '', cost: '', category: '' });
@@ -134,6 +151,7 @@ function App() {
   const monthGrid = useMemo(() => getMonthGrid(selectedDate), [selectedDate]);
 
   const currentDay = formatDate(selectedDate);
+  const currentDayFull = formatDateFull(selectedDate);
   const dayEvents = useMemo(
     () => events.filter((event) => event.event_date === currentDay),
     [events, currentDay],
@@ -167,6 +185,10 @@ function App() {
   useEffect(() => {
     refreshAll();
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   useEffect(() => {
     loadScheduleRange();
@@ -651,7 +673,12 @@ function App() {
             <h1>{activeTab === 'dashboard' ? 'Dashboard' : activeTab === 'mealplan' ? 'Meal Planner' : activeTab === 'training' ? 'Training Lab' : activeTab === 'schedule' ? 'Schedule' : 'Analytics'}</h1>
             <p className="subtitle">Organize your day by workouts, meals, and events.</p>
           </div>
-          <div className="status-pill">Live</div>
+          <div className="top-actions">
+            <button className="secondary-button theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+              {theme === 'light' ? 'Dark mode' : 'Light mode'}
+            </button>
+            <div className="status-pill">Live</div>
+          </div>
         </header>
 
         {statusMessage && <div className="toast">{statusMessage}</div>}
@@ -659,9 +686,9 @@ function App() {
         {activeTab === 'dashboard' && (
           <section className="dashboard-layout">
             <div className="dashboard-banner">
-              <div>
+                <div className="date-heading">
                 <span>Today</span>
-                <strong>{formatDate(selectedDate)}</strong>
+                <strong>{formatDateFull(selectedDate)}</strong>
               </div>
               <div className="banner-meta">
                 <span>Free time</span>
@@ -933,7 +960,7 @@ function App() {
                   <h3>Selected date</h3>
                   <input type="date" value={currentDay} onChange={(e) => setSelectedDate(new Date(e.target.value))} />
                   <div className="date-summary">
-                    <strong>{currentDay}</strong>
+                    <strong>{formatDateFull(selectedDate)}</strong>
                     <span>{dayEvents.length} events</span>
                   </div>
                   <div className="action-column">
