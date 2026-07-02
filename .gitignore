@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+.python-version
+
+# SQLite database
+*.db
+
+# Node
+node_modules/
+frontend/build/
+
+# Editor
+.DS_Store
+.vscode/
