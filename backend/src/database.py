@@ -175,6 +175,11 @@ class DatabaseManager:
                         created_at TIMESTAMP
                     )""")
 
+        c.execute("CREATE INDEX IF NOT EXISTS idx_calendar_event_date ON calendar_events(event_date);")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date);")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_body_logs_date ON body_logs(log_date);")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_nutrition_logs_date ON nutrition_logs(log_date);")
+
         self.conn.commit()
 
     def _migrate(self):
@@ -195,6 +200,12 @@ class DatabaseManager:
         existing_ex_cols = {r["name"] for r in c.execute("PRAGMA table_info(exercises)")}
         if "one_rm" not in existing_ex_cols:
             c.execute("ALTER TABLE exercises ADD COLUMN one_rm REAL")
+
+        c.execute("CREATE INDEX IF NOT EXISTS idx_calendar_event_date ON calendar_events(event_date);")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date);")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_body_logs_date ON body_logs(log_date);")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_nutrition_logs_date ON nutrition_logs(log_date);")
+
         self.conn.commit()
 
     def _seed_initial_data(self):
@@ -242,7 +253,16 @@ class DatabaseManager:
         return None
 
     def _ranked_search(self, table, query, extra_cols=""):
-        rows = self.conn.execute(f"SELECT * FROM {table}").fetchall()
+        if table not in {"ingredients", "exercises", "recipes", "workouts"}:
+            raise ValueError(f"Invalid table name: {table}")
+        q = query.strip().lower()
+        if not q:
+            rows = self.conn.execute(f"SELECT * FROM {table}").fetchall()
+            return [dict(r) for r in rows]
+        first_char = q[0] if q else ""
+        rows = self.conn.execute(f"SELECT * FROM {table} WHERE LOWER(name) LIKE ? OR LOWER(name) LIKE ?", (f"%{q}%", f"{first_char}%")).fetchall()
+        if not rows:
+            rows = self.conn.execute(f"SELECT * FROM {table}").fetchall()
         scored = []
         for r in rows:
             rank = self._search_rank(query, r["name"])

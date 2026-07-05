@@ -3,11 +3,12 @@ services:
     build: .
     volumes:
       - ./data:/data
-      - ./database.py:/app/database.py:ro
+      - ./backend/src:/app/src
     ports:
       - '8000:8000'
     environment:
       - DATABASE_URL=/data/performance_hq.db
+      - PYTHONPATH=/app/src
 
   frontend:
     build:

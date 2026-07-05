@@ -1,7 +1,33 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+import {
+  parseISODateLocal,
+  formatDate,
+  getOrdinal,
+  formatDateFull,
+  addDays,
+  startOfWeek,
+  monthRange,
+  getMonthGrid,
+  getWeekDays,
+  getWeekdayIndex,
+  getWeekRange,
+  getMonthTitle,
+  getHourlyGrid,
+  clampedMinutes,
+  CALENDAR_ROW_HEIGHT,
+} from './utils/dateUtils';
+import { fetchJson } from './services/api';
+import { SideNav, TopBar } from './components/Navbar';
+import Dashboard from './components/Dashboard/Dashboard';
+import MealPlanner from './components/MealPlanner/MealPlanner';
+import Training from './components/Training/Training';
+import Schedule from './components/Schedule/Schedule';
+import Analytics from './components/Analytics/Analytics';
+import EventModal from './components/Modals/EventModal';
+import ExerciseModal from './components/Modals/ExerciseModal';
+import IngredientModal from './components/Modals/IngredientModal';
+import EventDetailsModal from './components/Modals/EventDetailsModal';
 const eventTypeOptions = [
   { value: 'Work', label: 'Work' },
   { value: 'Training', label: 'Training' },
@@ -16,121 +42,6 @@ const eventColors = {
   'Commute': '#f59e0b',
   'Social': '#ec4899',
 };
-
-function parseISODateLocal(value) {
-  if (!value) return new Date();
-  if (typeof value === 'string') {
-    const [year, month, day] = value.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  }
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-}
-
-function formatDate(date) {
-  const d = parseISODateLocal(date);
-  return d.toISOString().slice(0, 10);
-}
-
-function getOrdinal(day) {
-  if (day % 100 >= 11 && day % 100 <= 13) return 'th';
-  if (day % 10 === 1) return 'st';
-  if (day % 10 === 2) return 'nd';
-  if (day % 10 === 3) return 'rd';
-  return 'th';
-}
-
-function formatDateFull(date) {
-  const d = parseISODateLocal(date);
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const day = d.getDate();
-  return `${days[d.getDay()]}, ${months[d.getMonth()]} ${day}${getOrdinal(day)}, ${d.getFullYear()}`;
-}
-
-function addDays(isoDate, days) {
-  const d = parseISODateLocal(isoDate);
-  d.setDate(d.getDate() + days);
-  return formatDate(d);
-}
-
-function startOfWeek(isoDate) {
-  const d = parseISODateLocal(isoDate);
-  const day = d.getDay();
-  const diff = (day + 6) % 7;
-  d.setDate(d.getDate() - diff);
-  return formatDate(d);
-}
-
-function monthRange(date) {
-  const d = parseISODateLocal(date);
-  const start = new Date(d.getFullYear(), d.getMonth(), 1);
-  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return { start: formatDate(start), end: formatDate(end) };
-}
-
-function getMonthGrid(date) {
-  const d = parseISODateLocal(date);
-  const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
-  const endDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  const startOffset = (firstDay.getDay() + 6) % 7;
-  const cells = [];
-  let current = 1 - startOffset;
-  for (let i = 0; i < 35; i += 1) {
-    const day = new Date(d.getFullYear(), d.getMonth(), current);
-    cells.push({
-      date: formatDate(day),
-      active: day.getMonth() === d.getMonth(),
-      label: day.getDate(),
-      current: day.getMonth() === d.getMonth(),
-    });
-    current += 1;
-  }
-  return Array.from({ length: 5 }, (_, rowIndex) => cells.slice(rowIndex * 7, rowIndex * 7 + 7));
-}
-
-function getWeekDays(date) {
-  const start = parseISODateLocal(startOfWeek(formatDate(date)));
-  const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  return Array.from({ length: 7 }, (_, index) => {
-    const current = new Date(start);
-    current.setDate(start.getDate() + index);
-    return {
-      date: formatDate(current),
-      weekday: weekdayNames[index],
-      label: current.getDate(),
-    };
-  });
-}
-
-function getWeekdayIndex(date, weekStartDate) {
-  const start = parseISODateLocal(weekStartDate);
-  const current = parseISODateLocal(date);
-  return Math.round((current - start) / (1000 * 60 * 60 * 24));
-}
-
-function getWeekRange(date) {
-  const start = startOfWeek(formatDate(date));
-  return { start, end: addDays(start, 6) };
-}
-
-function getMonthTitle(date) {
-  const d = parseISODateLocal(date);
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  return `${months[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function getHourlyGrid() {
-  return Array.from({ length: 24 }, (_, hour) => ({
-    label: `${hour.toString().padStart(2, '0')}:00`,
-    hour,
-  }));
-}
-
-function clampedMinutes(minutes) {
-  return Math.max(0, Math.round(minutes));
-}
-
-const CALENDAR_ROW_HEIGHT = 84;
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -305,14 +216,7 @@ function App() {
     weekGridRef.current.scrollTop = position;
   }, [scheduleView, currentDayEvents, eventsByDate, weekDates]);
 
-  async function fetchJson(path, options = {}) {
-    const response = await fetch(`${API_URL}${path}`, options);
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`${response.status} ${response.statusText}: ${text}`);
-    }
-    return response.status === 204 ? null : response.json();
-  }
+  // fetchJson imported from services/api
 
   async function refreshAll() {
     try {
@@ -1158,650 +1062,144 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="side-nav">
-        <div className="brand">Performance HQ</div>
-        {['dashboard', 'mealplan', 'training', 'schedule', 'analytics'].map((tab) => (
-          <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>
-            {tab === 'dashboard' ? 'Dashboard' : tab === 'mealplan' ? 'Meal Planner' : tab === 'training' ? 'Training' : tab === 'schedule' ? 'Schedule' : 'Analytics'}
-          </button>
-        ))}
-      </aside>
+      <SideNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
       <main className="content">
-        <header className="top-bar">
-          <div>
-            <h1>{activeTab === 'dashboard' ? 'Dashboard' : activeTab === 'mealplan' ? 'Meal Planner' : activeTab === 'training' ? 'Training Lab' : activeTab === 'schedule' ? 'Schedule' : 'Analytics'}</h1>
-            <p className="subtitle">Organize your day by workouts, meals, and events.</p>
-          </div>
-          <div className="top-actions">
-            <button className="secondary-button theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-              {theme === 'light' ? 'Dark mode' : 'Light mode'}
-            </button>
-            <div className="status-pill">Live</div>
-          </div>
-        </header>
+        <TopBar activeTab={activeTab} theme={theme} setTheme={setTheme} />
 
         {statusMessage && <div className="toast">{statusMessage}</div>}
 
         {activeTab === 'dashboard' && (
-          <section className="dashboard-layout">
-            <div className="dashboard-banner">
-                <div className="date-heading">
-                <span>Today</span>
-                <strong>{formatDateFull(selectedDate)}</strong>
-              </div>
-              <div className="banner-meta">
-                <span>Free time</span>
-                <strong>{freeTimeLabel}</strong>
-              </div>
-            </div>
-
-            <div className="dashboard-columns">
-              <div className="dashboard-panel workout-panel">
-                <div className="section-title">
-                  <h2>Today's scheduled workout</h2>
-                  <button onClick={() => setActiveTab('training')}>Build workout</button>
-                </div>
-                {todayWorkouts.length ? (
-                  todayWorkouts.map((event) => {
-                    const workout = workouts.find((item) => item.id === event.ref_workout_id);
-                    const details = workoutExercises[workout?.id] || [];
-                    return (
-                      <div key={event.id} className="card compact-card">
-                        <div className="card-heading">
-                          <div>
-                            <strong>{event.title || workout?.name || 'Training'}</strong>
-                            <span>{event.start_time || 'Anytime'}</span>
-                          </div>
-                          <span className="pill" style={{ background: eventColors[event.event_type] }}>{event.event_type.replace(/ .*/, '')}</span>
-                        </div>
-                        {workout ? (
-                          <div className="workout-form">
-                            {details.length ? details.map((exercise) => (
-                              <div key={exercise.exercise_id} className="workout-row">
-                                <div>
-                                  <strong>{exercise.name}</strong>
-                                  <small>{exercise.sets}×{exercise.reps} · {exercise.weight || 'percent'}</small>
-                                </div>
-                                <input
-                                  placeholder="Weights (e.g. 225,225,235)"
-                                  value={dashboardPerformance[performanceFieldKey(event.id, exercise.exercise_id)] || ''}
-                                  onChange={(e) => handlePerformanceChange(event.id, exercise.exercise_id, e.target.value)}
-                                />
-                              </div>
-                            )) : <div className="empty-state">Loading workout details...</div>}
-                            <button className="primary-button" onClick={() => handleSavePerformance(event.id, workout)}>
-                              Save workout log
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="empty-state">No workout linked to this event.</div>
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="empty-state">No training scheduled for today.</div>
-                )}
-              </div>
-
-              <div className="dashboard-panel meal-panel">
-                <div className="section-title">
-                  <h2>Meals scheduled</h2>
-                  <button onClick={() => setActiveTab('mealplan')}>Create meal</button>
-                </div>
-                <div className="event-list">
-                  {todayMeals.length ? todayMeals.map((event) => (
-                    <button key={event.id} className="event-item" onClick={() => openEventDetails(event)}>
-                      <div>
-                        <strong>{event.title || 'Meal'}</strong>
-                        <span>{event.start_time || 'Anytime'}</span>
-                      </div>
-                      <span>{event.ref_recipe_id ? `Recipe ${event.ref_recipe_id}` : ''}</span>
-                    </button>
-                  )) : <div className="empty-state">No meals scheduled for today.</div>}
-                </div>
-              </div>
-            </div>
-          </section>
+          <Dashboard
+            selectedDate={selectedDate}
+            freeTimeLabel={freeTimeLabel}
+            todayWorkouts={todayWorkouts}
+            workouts={workouts}
+            workoutExercises={workoutExercises}
+            eventColors={eventColors}
+            dashboardPerformance={dashboardPerformance}
+            performanceFieldKey={performanceFieldKey}
+            handlePerformanceChange={handlePerformanceChange}
+            handleSavePerformance={handleSavePerformance}
+            todayMeals={todayMeals}
+            openEventDetails={openEventDetails}
+            setActiveTab={setActiveTab}
+          />
         )}
 
         {activeTab === 'mealplan' && (
-          <section className="tabbed-layout">
-            <div className="sub-tabs">
-              <button className={plannerTab === 'build' ? 'active' : ''} onClick={() => setPlannerTab('build')}>Recipe Builder</button>
-              <button className={plannerTab === 'list' ? 'active' : ''} onClick={() => setPlannerTab('list')}>My Recipes</button>
-              <button className={plannerTab === 'ingredients' ? 'active' : ''} onClick={() => setPlannerTab('ingredients')}>Ingredients</button>
-            </div>
-
-            {plannerTab === 'build' ? (
-              <div className="form-grid">
-                <div className="panel form-card">
-                  <h2>Recipe details</h2>
-                  <label>Name</label>
-                  <input name="name" value={recipeForm.name} onChange={(e) => setRecipeForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Post-workout bowl" />
-                  <label>Estimated cook time (mins)</label>
-                  <input name="time_to_cook_mins" value={recipeForm.time_to_cook_mins} onChange={(e) => setRecipeForm((prev) => ({ ...prev, time_to_cook_mins: e.target.value }))} placeholder="25" />
-                  <div className="divider" />
-                  <div className="inline-action-row">
-                    <span>Ingredients</span>
-                    <button className="secondary-button" onClick={handleIngredientModalOpen}>Add ingredient</button>
-                  </div>
-                  <select name="ingredient_id" value={recipeForm.ingredient_id} onChange={(e) => setRecipeForm((prev) => ({ ...prev, ingredient_id: e.target.value }))}>
-                    <option value="">Choose ingredient</option>
-                    {ingredients.map((item) => (
-                      <option key={item.id} value={item.id}>{item.name}</option>
-                    ))}
-                  </select>
-                  <input name="quantity_g" value={recipeForm.quantity_g} onChange={(e) => setRecipeForm((prev) => ({ ...prev, quantity_g: e.target.value }))} placeholder="Amount in grams" />
-                  <button className="secondary-button" onClick={addRecipeIngredient}>Add to recipe</button>
-                  <div className="list-group compact">
-                    {recipeForm.items.map((item, index) => (
-                      <div key={index} className="entity-card">
-                        <div>
-                          <strong>{item.name}</strong>
-                          <span>{item.quantity_g}g · {Math.round((item.kcal_per_100g * item.quantity_g) / 100)} kcal</span>
-                        </div>
-                        <button className="action-delete" onClick={() => removeRecipeIngredient(index)}>Remove</button>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="primary-button" onClick={saveRecipe}>Save recipe</button>
-                </div>
-              </div>
-            ) : plannerTab === 'list' ? (
-              <div className="panel list-card">
-                <div className="section-title">
-                  <h2>My saved recipes</h2>
-                  <button className="secondary-button" onClick={() => setPlannerTab('build')}>New recipe</button>
-                </div>
-                <div className="event-list">
-                  {recipes.length ? recipes.map((recipe) => (
-                    <div key={recipe.id} className="entity-card">
-                      <div>
-                        <strong>{recipe.name}</strong>
-                        <span>{recipe.total_kcal} kcal · ${recipe.cost.toFixed(2)}</span>
-                      </div>
-                      <div className="action-row">
-                        <button onClick={() => editRecipe(recipe)}>Edit</button>
-                        <button className="action-delete" onClick={() => deleteRecipe(recipe.id)}>Delete</button>
-                      </div>
-                    </div>
-                  )) : <div className="empty-state">No recipes yet.</div>}
-                </div>
-              </div>
-            ) : (
-              <div className="panel list-card">
-                <div className="section-title">
-                  <h2>Ingredient library</h2>
-                  <button className="primary-button" onClick={handleIngredientModalOpen}>Add ingredient</button>
-                </div>
-                <div className="search-row">
-                  <input
-                    value={ingredientLibrarySearch}
-                    onChange={(e) => setIngredientLibrarySearch(e.target.value)}
-                    placeholder="Search ingredients"
-                  />
-                </div>
-                <div className="exercise-list-scroll">
-                  {filteredIngredients.length ? filteredIngredients.map((ingredient) => (
-                    <div key={ingredient.id} className="entity-card">
-                      <div>
-                        <strong>{ingredient.name}</strong>
-                        <span>{ingredient.kcal_per_100g} kcal / 100g</span>
-                      </div>
-                      <div className="action-row">
-                        <button onClick={() => openIngredientEdit(ingredient)}>Edit</button>
-                        <button className="action-delete" onClick={() => handleDeleteIngredient(ingredient.id)}>Delete</button>
-                      </div>
-                    </div>
-                  )) : <div className="empty-state">No ingredients found.</div>}
-                </div>
-              </div>
-            )}
-          </section>
+          <MealPlanner
+            plannerTab={plannerTab}
+            setPlannerTab={setPlannerTab}
+            recipeForm={recipeForm}
+            setRecipeForm={setRecipeForm}
+            handleIngredientModalOpen={handleIngredientModalOpen}
+            ingredients={ingredients}
+            addRecipeIngredient={addRecipeIngredient}
+            removeRecipeIngredient={removeRecipeIngredient}
+            saveRecipe={saveRecipe}
+            recipes={recipes}
+            editRecipe={editRecipe}
+            deleteRecipe={deleteRecipe}
+            ingredientLibrarySearch={ingredientLibrarySearch}
+            setIngredientLibrarySearch={setIngredientLibrarySearch}
+            filteredIngredients={filteredIngredients}
+            openIngredientEdit={openIngredientEdit}
+            handleDeleteIngredient={handleDeleteIngredient}
+          />
         )}
 
         {activeTab === 'training' && (
-          <section className="tabbed-layout">
-            <div className="sub-tabs">
-              <button className={trainingTab === 'build' ? 'active' : ''} onClick={() => setTrainingTab('build')}>Workout Builder</button>
-              <button className={trainingTab === 'list' ? 'active' : ''} onClick={() => setTrainingTab('list')}>My Workouts</button>
-              <button className={trainingTab === 'exercises' ? 'active' : ''} onClick={() => setTrainingTab('exercises')}>Exercises</button>
-            </div>
-
-            {trainingTab === 'build' ? (
-              <div className="form-grid">
-                <div className="panel form-card">
-                  <h2>Workout details</h2>
-                  <label>Name</label>
-                  <input name="name" value={workoutForm.name} onChange={(e) => setWorkoutForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Lower body power" />
-                  <label>Estimated duration (mins)</label>
-                  <input name="duration_mins" value={workoutForm.duration_mins} onChange={(e) => setWorkoutForm((prev) => ({ ...prev, duration_mins: e.target.value }))} placeholder="45" />
-                  <div className="divider" />
-                  <div className="inline-action-row">
-                    <span>Exercises</span>
-                    <button className="secondary-button" onClick={handleExerciseModalOpen}>Add exercise</button>
-                  </div>
-                  <select name="exercise_id" value={workoutForm.exercise_id} onChange={(e) => setWorkoutForm((prev) => ({ ...prev, exercise_id: e.target.value }))}>
-                    <option value="">Choose exercise</option>
-                    {exercises.map((exercise) => (
-                      <option key={exercise.id} value={exercise.id}>{exercise.name}</option>
-                    ))}
-                  </select>
-                  <div className="inline-row">
-                    <input name="sets" value={workoutForm.sets} onChange={(e) => setWorkoutForm((prev) => ({ ...prev, sets: e.target.value }))} placeholder="Sets" />
-                    <input name="reps" value={workoutForm.reps} onChange={(e) => setWorkoutForm((prev) => ({ ...prev, reps: e.target.value }))} placeholder="Reps" />
-                    <input name="percent" value={workoutForm.percent} onChange={(e) => setWorkoutForm((prev) => ({ ...prev, percent: e.target.value }))} placeholder="%1RM" />
-                  </div>
-                  <button className="secondary-button" onClick={addWorkoutExercise}>Add to workout</button>
-                  <div className="list-group compact">
-                    {workoutForm.items.map((item, index) => (
-                      <div key={index} className="entity-card">
-                        <div>
-                          <strong>{item.name}</strong>
-                          <span>{item.sets}×{item.reps} · {item.weight}</span>
-                        </div>
-                        <button className="action-delete" onClick={() => removeWorkoutExercise(index)}>Remove</button>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="primary-button" onClick={saveWorkout}>Save workout</button>
-                </div>
-              </div>
-            ) : trainingTab === 'list' ? (
-              <div className="panel list-card">
-                <div className="section-title">
-                  <h2>My saved workouts</h2>
-                  <button className="secondary-button" onClick={() => setTrainingTab('build')}>New workout</button>
-                </div>
-                <div className="event-list">
-                  {workouts.length ? workouts.map((workout) => (
-                    <div key={workout.id} className="entity-card">
-                      <div>
-                        <strong>{workout.name}</strong>
-                        <span>{workout.duration_mins || 'N/A'} mins</span>
-                      </div>
-                      <div className="action-row">
-                        <button onClick={() => editWorkout(workout)}>Edit</button>
-                        <button className="action-delete" onClick={() => deleteWorkout(workout.id)}>Delete</button>
-                      </div>
-                    </div>
-                  )) : <div className="empty-state">No workouts yet.</div>}
-                </div>
-              </div>
-            ) : (
-              <div className="panel list-card">
-                <div className="section-title">
-                  <h2>Exercise library</h2>
-                  <button className="primary-button" onClick={handleExerciseModalOpen}>Add exercise</button>
-                </div>
-                <div className="search-row">
-                  <input
-                    value={exerciseLibrarySearch}
-                    onChange={(e) => setExerciseLibrarySearch(e.target.value)}
-                    placeholder="Search exercises"
-                  />
-                </div>
-                <div className="exercise-list-scroll">
-                  {filteredExercises.length ? filteredExercises.map((exercise) => (
-                    <div key={exercise.id} className="entity-card">
-                      <div>
-                        <strong>{exercise.name}</strong>
-                        <span>{exercise.one_rm ? `${exercise.one_rm} 1RM` : 'No 1RM yet'}</span>
-                      </div>
-                      <div className="action-row">
-                        <button onClick={() => openExerciseEdit(exercise)}>Edit</button>
-                        <button className="action-delete" onClick={() => handleDeleteExercise(exercise.id)}>Delete</button>
-                      </div>
-                    </div>
-                  )) : <div className="empty-state">No exercises found.</div>}
-                </div>
-              </div>
-            )}
-          </section>
+          <Training
+            trainingTab={trainingTab}
+            setTrainingTab={setTrainingTab}
+            workoutForm={workoutForm}
+            setWorkoutForm={setWorkoutForm}
+            handleExerciseModalOpen={handleExerciseModalOpen}
+            exercises={exercises}
+            addWorkoutExercise={addWorkoutExercise}
+            removeWorkoutExercise={removeWorkoutExercise}
+            saveWorkout={saveWorkout}
+            workouts={workouts}
+            editWorkout={editWorkout}
+            deleteWorkout={deleteWorkout}
+            exerciseLibrarySearch={exerciseLibrarySearch}
+            setExerciseLibrarySearch={setExerciseLibrarySearch}
+            filteredExercises={filteredExercises}
+            openExerciseEdit={openExerciseEdit}
+            handleDeleteExercise={handleDeleteExercise}
+          />
         )}
 
         {activeTab === 'schedule' && (
-          <section className="schedule-layout schedule-calendar-layout">
-            <div className="schedule-header schedule-calendar-header">
-              <div className="view-tabs">
-                {['month', 'week', 'day'].map((view) => (
-                  <button key={view} className={scheduleView === view ? 'active' : ''} onClick={() => setScheduleView(view)}>
-                    {view === 'month' ? 'Month' : view === 'week' ? 'Week' : 'Day'}
-                  </button>
-                ))}
-              </div>
-              <div className="schedule-actions">
-                <button className="secondary-button today-button" onClick={() => setSelectedDate(new Date())}>Today</button>
-                <button className="primary-button add-event-button" onClick={() => openEventModal('work')}>
-                  <span className="button-icon">＋</span>
-                  Add event
-                </button>
-              </div>
-              <div className="schedule-legend">
-                {Object.entries(eventColors).map(([type, color]) => (
-                  <span key={type} className="legend-pill" style={{ background: color }}>
-                    {type.replace(/ .*/, '')}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="schedule-calendar-body">
-              {scheduleView === 'month' && (
-                <div className="month-view">
-                  <div className="month-view-header">
-                    <button className="icon-button" onClick={() => changeMonth(-1)}>‹</button>
-                    <div className="month-title">{getMonthTitle(selectedDate)}</div>
-                    <button className="icon-button" onClick={() => changeMonth(1)}>›</button>
-                  </div>
-                  <div className="month-weekdays">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((weekday) => (
-                      <div key={weekday} className="weekday-label">{weekday}</div>
-                    ))}
-                  </div>
-                  <div className="month-grid">
-                    {monthGrid.map((week, weekIndex) => (
-                      <div key={weekIndex} className="month-row">
-                        {week.map((day) => {
-                          const dayEvents = events.filter((event) => event.event_date === day.date);
-                          return (
-                            <button
-                              key={day.date}
-                              type="button"
-                              className={`month-cell ${day.active ? '' : 'disabled'} ${day.date === currentDay ? 'selected' : ''}`}
-                              onClick={() => setSelectedDate(new Date(day.date))}
-                            >
-                              <div className="month-cell-top">
-                                <span>{day.label}</span>
-                                {day.date === currentDay && <span className="current-dot" />}
-                              </div>
-                              <div className="month-cell-events">
-                                {dayEvents.slice(0, 3).map((event) => (
-                                  <span key={event.id} className="event-chip" style={{ background: eventColors[event.event_type] }}>
-                                    {event.event_type.replace(/ .*/, '')}
-                                  </span>
-                                ))}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {scheduleView === 'week' && (
-                <div className="week-view">
-                  <div className="week-view-header schedule-nav-row">
-                    <button className="icon-button" onClick={() => changeWeek(-1)}>‹</button>
-                    <div className="schedule-view-title">{weekRangeLabel}</div>
-                    <button className="icon-button" onClick={() => changeWeek(1)}>›</button>
-                  </div>
-                  <div className="week-grid-wrapper" ref={weekGridRef}>
-                    <div className="week-grid week-calendar-grid">
-                      <div className="week-time-header" />
-                      {weekDates.map((day) => (
-                        <div key={day.date} className="week-day-header">
-                          <span>{day.weekday}</span>
-                          <strong>{day.label}</strong>
-                        </div>
-                      ))}
-                      {hourlyGrid.map((row) => (
-                        <React.Fragment key={`week-row-${row.hour}`}>
-                          <div className="week-time-cell">{row.label}</div>
-                          {weekDates.map((day) => (
-                            <button
-                              key={`${day.date}-${row.hour}`}
-                              type="button"
-                              className="week-grid-cell"
-                              onPointerDown={(e) => handleCellPointerDown(e, day.date)}
-                              onPointerUp={(e) => handleCellPointerUp(e, day.date)}
-                              data-hour={row.hour}
-                            />
-                          ))}
-                        </React.Fragment>
-                      ))}
-                      {weekDates.map((day, index) => (
-                        (eventsByDate[day.date] || []).map((event) => {
-                          const [startHour, startMinutes] = (event.start_time || '00:00').split(':').map(Number);
-                          const startTotal = startHour * 60 + (startMinutes || 0);
-                          const duration = Number(event.duration_mins) || 60;
-                          const top = 56 + (startTotal / 60) * CALENDAR_ROW_HEIGHT;
-                          const height = Math.max(30, (duration / 60) * CALENDAR_ROW_HEIGHT);
-                          const dragDelta = dragInfo?.event?.id === event.id ? dragInfo.deltaMinutes || 0 : 0;
-                          const offsetTop = dragInfo?.type === 'move' && dragInfo.event.id === event.id
-                            ? (dragDelta / 60) * CALENDAR_ROW_HEIGHT
-                            : 0;
-                          const resizeDelta = dragInfo?.type === 'resize' && dragInfo.event.id === event.id
-                            ? dragDelta
-                            : 0;
-                          return (
-                            <button
-                              key={event.id}
-                              type="button"
-                              className={`event-block week-event-block ${dragInfo?.event?.id === event.id ? 'dragging' : ''}`}
-                              style={{
-                                top: `${top + offsetTop}px`,
-                                height: `${Math.max(30, height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT)}px`,
-                                left: `calc(120px + (${index} * ((100% - 120px) / 7)) + 8px)`,
-                                width: `calc((100% - 120px) / 7 - 16px)`,
-                                background: eventColors[event.event_type],
-                              }}
-                              onPointerDown={(e) => handleEventPointerDown(e, event)}
-                              onPointerUp={(e) => handleEventPointerUp(e, event)}
-                            >
-                              <strong>{event.title || event.event_type.replace(/ .*/, '')}</strong>
-                              <small>{event.start_time || 'All day'}</small>
-                              <div className="resize-handle" onPointerDown={(e) => { e.stopPropagation(); handleEventResizeStart(e, event); }} />
-                            </button>
-                          );
-                        })
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {scheduleView === 'day' && (
-                <div className="day-view">
-                  <div className="day-view-header schedule-nav-row">
-                    <button className="icon-button" onClick={() => changeDay(-1)}>‹</button>
-                    <div>
-                      <span className="day-title">{new Date(currentDay).toLocaleDateString(undefined, { weekday: 'long' })}</span>
-                      <strong>{formatDateFull(selectedDate)}</strong>
-                    </div>
-                    <button className="icon-button" onClick={() => changeDay(1)}>›</button>
-                  </div>
-                  <div className="day-grid-wrapper" ref={weekGridRef}>
-                    <div className="day-grid day-calendar-grid">
-                      {hourlyGrid.map((row) => (
-                        <React.Fragment key={`day-row-${row.hour}`}>
-                          <div className="day-time-cell">{row.label}</div>
-                          <button
-                            key={`${row.hour}-cell`}
-                            type="button"
-                            className="day-grid-cell"
-                            onPointerDown={(e) => handleCellPointerDown(e, currentDay)}
-                            onPointerUp={(e) => handleCellPointerUp(e, currentDay)}
-                            data-hour={row.hour}
-                          />
-                        </React.Fragment>
-                      ))}
-                      <div className="day-grid-events">
-                        {(currentDayEvents || []).map((event) => {
-                          const [startHour, startMinutes] = (event.start_time || '00:00').split(':').map(Number);
-                          const startTotal = startHour * 60 + (startMinutes || 0);
-                          const duration = Number(event.duration_mins) || 60;
-                          const top = (startTotal / 60) * CALENDAR_ROW_HEIGHT;
-                          const height = Math.max(30, (duration / 60) * CALENDAR_ROW_HEIGHT);
-                          const dragDelta = dragInfo?.event?.id === event.id ? dragInfo.deltaMinutes || 0 : 0;
-                          const offsetTop = dragInfo?.type === 'move' && dragInfo.event.id === event.id
-                            ? (dragDelta / 60) * CALENDAR_ROW_HEIGHT
-                            : 0;
-                          const resizeDelta = dragInfo?.type === 'resize' && dragInfo.event.id === event.id
-                            ? dragDelta
-                            : 0;
-                          return (
-                            <button
-                              key={event.id}
-                              type="button"
-                              className={`event-block day-event-block ${dragInfo?.event?.id === event.id ? 'dragging' : ''}`}
-                              style={{
-                                top: `${top + offsetTop}px`,
-                                height: `${Math.max(30, height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT)}px`,
-                                background: eventColors[event.event_type],
-                              }}
-                              onPointerDown={(e) => handleEventPointerDown(e, event)}
-                              onPointerUp={(e) => handleEventPointerUp(e, event)}
-                            >
-                              <strong>{event.title || event.event_type.replace(/ .*/, '')}</strong>
-                              <small>{event.start_time || 'All day'}</small>
-                              <div className="resize-handle" onPointerDown={(e) => { e.stopPropagation(); handleEventResizeStart(e, event); }} />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
+          <Schedule
+            scheduleView={scheduleView}
+            setScheduleView={setScheduleView}
+            setSelectedDate={setSelectedDate}
+            openEventModal={openEventModal}
+            eventColors={eventColors}
+            selectedDate={selectedDate}
+            changeMonth={changeMonth}
+            monthGrid={monthGrid}
+            events={events}
+            currentDay={currentDay}
+            changeWeek={changeWeek}
+            weekRangeLabel={weekRangeLabel}
+            weekGridRef={weekGridRef}
+            weekDates={weekDates}
+            hourlyGrid={hourlyGrid}
+            handleCellPointerDown={handleCellPointerDown}
+            handleCellPointerUp={handleCellPointerUp}
+            eventsByDate={eventsByDate}
+            dragInfo={dragInfo}
+            handleEventPointerDown={handleEventPointerDown}
+            handleEventPointerUp={handleEventPointerUp}
+            handleEventResizeStart={handleEventResizeStart}
+            changeDay={changeDay}
+            currentDayEvents={currentDayEvents}
+          />
         )}
 
-        {activeTab === 'analytics' && (
-          <section className="panel-grid analytics-grid">
-            <div className="panel">
-              <h2>Analytics</h2>
-              <p>Analytics will appear here once workout logs and meal history are in place.</p>
-            </div>
-          </section>
-        )}
+        {activeTab === 'analytics' && <Analytics />}
 
-        {eventModalVisible && (
-          <div className="modal-overlay" onClick={() => setEventModalVisible(false)}>
-            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-              <h3>Add calendar event</h3>
-              <label>Category</label>
-              <select name="category" value={scheduleForm.category} onChange={handleEventFormChange}>
-                {eventTypeOptions.map((item) => (
-                  <option key={item.value} value={item.value}>{item.label}</option>
-                ))}
-              </select>
-              <label>Date</label>
-              <input type="date" name="date" value={scheduleForm.date} onChange={handleEventFormChange} />
-              <label>Start time</label>
-              <input type="time" name="start_time" value={scheduleForm.start_time} onChange={handleEventFormChange} />
-              {scheduleForm.category === 'Work' && (
-                <>
-                  <label>Duration (mins)</label>
-                  <input type="number" name="duration_mins" value={scheduleForm.duration_mins} onChange={handleEventFormChange} placeholder="60" />
-                </>
-              )}
-              {scheduleForm.category === 'Training' && (
-                <>
-                  <label>Workout</label>
-                  <select name="ref_workout_id" value={scheduleForm.ref_workout_id} onChange={handleEventFormChange}>
-                    <option value="">Choose workout</option>
-                    {workouts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                  </select>
-                  <label>Duration</label>
-                  <input type="text" value={`${getSelectedWorkoutDuration() || 'Auto'}`} disabled />
-                </>
-              )}
-              {scheduleForm.category === 'Meal' && (
-                <>
-                  <label>Recipe</label>
-                  <select name="ref_recipe_id" value={scheduleForm.ref_recipe_id} onChange={handleEventFormChange}>
-                    <option value="">Choose recipe</option>
-                    {recipes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                  </select>
-                  <label>Duration</label>
-                  <input type="text" value={`${getSelectedRecipeDuration() || 'Auto'}`} disabled />
-                </>
-              )}
-              {scheduleForm.category === 'Commute' && (
-                <>
-                  <label>Duration (mins)</label>
-                  <input type="number" name="duration_mins" value={scheduleForm.duration_mins} onChange={handleEventFormChange} placeholder="30" />
-                </>
-              )}
-              {scheduleForm.category === 'Social' && (
-                <>
-                  <label>Minimum duration (mins)</label>
-                  <input type="number" name="min_duration" value={scheduleForm.min_duration} onChange={handleEventFormChange} placeholder="30" />
-                  <label>Maximum duration (mins)</label>
-                  <input type="number" name="max_duration" value={scheduleForm.max_duration} onChange={handleEventFormChange} placeholder="90" />
-                </>
-              )}
-              <label>Notes</label>
-              <textarea name="notes" value={scheduleForm.notes} onChange={handleEventFormChange} rows={3} />
-              <div className="modal-actions">
-                <button className="secondary-button" onClick={() => setEventModalVisible(false)}>Cancel</button>
-                <button className="primary-button" onClick={handleSaveEvent}>Save event</button>
-              </div>
-            </div>
-          </div>
-        )}
+        <EventModal
+          eventModalVisible={eventModalVisible}
+          setEventModalVisible={setEventModalVisible}
+          scheduleForm={scheduleForm}
+          handleEventFormChange={handleEventFormChange}
+          eventTypeOptions={eventTypeOptions}
+          workouts={workouts}
+          getSelectedWorkoutDuration={getSelectedWorkoutDuration}
+          recipes={recipes}
+          getSelectedRecipeDuration={getSelectedRecipeDuration}
+          handleSaveEvent={handleSaveEvent}
+        />
 
-        {exerciseModalVisible && (
-          <div className="modal-overlay" onClick={() => setExerciseModalVisible(false)}>
-            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-              <h3>{editingExercise ? 'Edit exercise' : 'Add exercise'}</h3>
-              <label>Name</label>
-              <input value={exerciseForm.name} onChange={(e) => setExerciseForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Barbell Back Squat" />
-              <label>Category</label>
-              <input value={exerciseForm.category} onChange={(e) => setExerciseForm((prev) => ({ ...prev, category: e.target.value }))} placeholder="Lower body" />
-              <label>Optional 1RM</label>
-              <input value={exerciseForm.one_rm} onChange={(e) => setExerciseForm((prev) => ({ ...prev, one_rm: e.target.value }))} placeholder="225" />
-              <div className="modal-actions">
-                <button className="secondary-button" onClick={() => setExerciseModalVisible(false)}>Cancel</button>
-                <button className="primary-button" onClick={handleSaveExercise}>{editingExercise ? 'Save changes' : 'Save'}</button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ExerciseModal
+          exerciseModalVisible={exerciseModalVisible}
+          setExerciseModalVisible={setExerciseModalVisible}
+          editingExercise={editingExercise}
+          exerciseForm={exerciseForm}
+          setExerciseForm={setExerciseForm}
+          handleSaveExercise={handleSaveExercise}
+        />
 
-        {ingredientModalVisible && (
-          <div className="modal-overlay" onClick={() => setIngredientModalVisible(false)}>
-            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-              <h3>{editingIngredient ? 'Edit ingredient' : 'Add ingredient'}</h3>
-              <label>Name</label>
-              <input value={ingredientForm.name} onChange={(e) => setIngredientForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Chicken Breast" />
-              <label>Calories / 100g</label>
-              <input value={ingredientForm.kcal} onChange={(e) => setIngredientForm((prev) => ({ ...prev, kcal: e.target.value }))} placeholder="165" />
-              <label>Cost / 100g</label>
-              <input value={ingredientForm.cost} onChange={(e) => setIngredientForm((prev) => ({ ...prev, cost: e.target.value }))} placeholder="1.80" />
-              <label>Category</label>
-              <input value={ingredientForm.category} onChange={(e) => setIngredientForm((prev) => ({ ...prev, category: e.target.value }))} placeholder="Meat & Poultry" />
-              <div className="modal-actions">
-                <button className="secondary-button" onClick={() => setIngredientModalVisible(false)}>Cancel</button>
-                <button className="primary-button" onClick={handleSaveIngredient}>{editingIngredient ? 'Save changes' : 'Save'}</button>
-              </div>
-            </div>
-          </div>
-        )}
+        <IngredientModal
+          ingredientModalVisible={ingredientModalVisible}
+          setIngredientModalVisible={setIngredientModalVisible}
+          editingIngredient={editingIngredient}
+          ingredientForm={ingredientForm}
+          setIngredientForm={setIngredientForm}
+          handleSaveIngredient={handleSaveIngredient}
+        />
 
-        {selectedEvent && !eventModalVisible && (
-          <div className="modal-overlay" onClick={() => setSelectedEvent(null)}>
-            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-              <h3>Event details</h3>
-              <p><strong>{selectedEvent.title}</strong></p>
-              <p>{selectedEvent.event_type}</p>
-              <p>{selectedEvent.event_date} {selectedEvent.start_time || ''}</p>
-              <p>Duration: {selectedEvent.duration_mins || '60'} min</p>
-              <p>{selectedEvent.notes || 'No notes'}</p>
-              <div className="modal-actions">
-                <button className="secondary-button" onClick={() => setSelectedEvent(null)}>Close</button>
-                <button className="secondary-button" onClick={() => openEventEdit(selectedEvent)}>Edit</button>
-                <button className="action-delete" onClick={() => handleDeleteEvent(selectedEvent.id)}>Delete</button>
-              </div>
-            </div>
-          </div>
-        )}
+        <EventDetailsModal
+          selectedEvent={selectedEvent}
+          eventModalVisible={eventModalVisible}
+          setSelectedEvent={setSelectedEvent}
+          openEventEdit={openEventEdit}
+          handleDeleteEvent={handleDeleteEvent}
+        />
       </main>
     </div>
   );

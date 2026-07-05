@@ -1,4 +1,7 @@
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -156,6 +159,8 @@ def update_exercise(exercise_id: int, data: ExerciseBase):
 
 @app.delete("/exercises/{exercise_id}")
 def delete_exercise(exercise_id: int):
+    if not db.get_exercise(exercise_id):
+        raise HTTPException(status_code=404, detail="Exercise not found")
     db.delete_exercise(exercise_id)
     return {"status": "deleted"}
 
@@ -212,6 +217,8 @@ def update_recipe(recipe_id: int, data: RecipeCreate):
 
 @app.delete("/recipes/{recipe_id}")
 def delete_recipe(recipe_id: int):
+    if not db.get_recipe(recipe_id):
+        raise HTTPException(status_code=404, detail="Recipe not found")
     db.delete_recipe(recipe_id)
     return {"status": "deleted"}
 
@@ -266,6 +273,8 @@ def update_workout(workout_id: int, data: WorkoutCreate):
 
 @app.delete("/workouts/{workout_id}")
 def delete_workout(workout_id: int):
+    if not db.get_workout(workout_id):
+        raise HTTPException(status_code=404, detail="Workout not found")
     db.delete_workout(workout_id)
     return {"status": "deleted"}
 
@@ -320,6 +329,8 @@ def update_calendar_event(event_id: int, data: CalendarEventCreate):
 
 @app.delete("/calendar/{event_id}")
 def delete_calendar_event(event_id: int):
+    if not db.get_event(event_id):
+        raise HTTPException(status_code=404, detail="Event not found")
     db.delete_calendar_event(event_id)
     return {"status": "deleted"}
 
