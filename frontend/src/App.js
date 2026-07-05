@@ -3,22 +3,31 @@ import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const eventTypeOptions = [
-  { value: '💼 Work / Meeting', label: 'Work' },
-  { value: '🏋️ Training Session', label: 'Training' },
-  { value: '🥗 Meal/Nutrition', label: 'Meal' },
-  { value: '🚗 Commute', label: 'Commute' },
-  { value: '🗓️ Social / Life', label: 'Social' },
+  { value: 'Work', label: 'Work' },
+  { value: 'Training', label: 'Training' },
+  { value: 'Meal', label: 'Meal' },
+  { value: 'Commute', label: 'Commute' },
+  { value: 'Social', label: 'Social' },
 ];
 const eventColors = {
-  '💼 Work / Meeting': '#7c3aed',
-  '🏋️ Training Session': '#2563eb',
-  '🥗 Meal/Nutrition': '#10b981',
-  '🚗 Commute': '#f59e0b',
-  '🗓️ Social / Life': '#ec4899',
+  'Work': '#7c3aed',
+  'Training': '#2563eb',
+  'Meal': '#10b981',
+  'Commute': '#f59e0b',
+  'Social': '#ec4899',
 };
 
+function parseISODateLocal(value) {
+  if (!value) return new Date();
+  if (typeof value === 'string') {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
 function formatDate(date) {
-  const d = new Date(date);
+  const d = parseISODateLocal(date);
   return d.toISOString().slice(0, 10);
 }
 
@@ -31,7 +40,7 @@ function getOrdinal(day) {
 }
 
 function formatDateFull(date) {
-  const d = new Date(date);
+  const d = parseISODateLocal(date);
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const day = d.getDate();
@@ -39,28 +48,28 @@ function formatDateFull(date) {
 }
 
 function addDays(isoDate, days) {
-  const d = new Date(`${isoDate}T00:00:00`);
+  const d = parseISODateLocal(isoDate);
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return formatDate(d);
 }
 
 function startOfWeek(isoDate) {
-  const d = new Date(`${isoDate}T00:00:00`);
+  const d = parseISODateLocal(isoDate);
   const day = d.getDay();
   const diff = (day + 6) % 7;
   d.setDate(d.getDate() - diff);
-  return d.toISOString().slice(0, 10);
+  return formatDate(d);
 }
 
 function monthRange(date) {
-  const d = new Date(date);
+  const d = parseISODateLocal(date);
   const start = new Date(d.getFullYear(), d.getMonth(), 1);
   const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
   return { start: formatDate(start), end: formatDate(end) };
 }
 
 function getMonthGrid(date) {
-  const d = new Date(date);
+  const d = parseISODateLocal(date);
   const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
   const endDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   const startOffset = (firstDay.getDay() + 6) % 7;
@@ -80,7 +89,7 @@ function getMonthGrid(date) {
 }
 
 function getWeekDays(date) {
-  const start = new Date(`${startOfWeek(formatDate(date))}T00:00:00`);
+  const start = parseISODateLocal(startOfWeek(formatDate(date)));
   const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   return Array.from({ length: 7 }, (_, index) => {
     const current = new Date(start);
@@ -93,13 +102,19 @@ function getWeekDays(date) {
   });
 }
 
+function getWeekdayIndex(date, weekStartDate) {
+  const start = parseISODateLocal(weekStartDate);
+  const current = parseISODateLocal(date);
+  return Math.round((current - start) / (1000 * 60 * 60 * 24));
+}
+
 function getWeekRange(date) {
   const start = startOfWeek(formatDate(date));
   return { start, end: addDays(start, 6) };
 }
 
 function getMonthTitle(date) {
-  const d = new Date(date);
+  const d = parseISODateLocal(date);
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   return `${months[d.getMonth()]} ${d.getFullYear()}`;
 }
@@ -136,9 +151,17 @@ function App() {
   const [ingredientModalVisible, setIngredientModalVisible] = useState(false);
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [editingExercise, setEditingExercise] = useState(null);
+  const [editingIngredient, setEditingIngredient] = useState(null);
+  const [exerciseLibrarySearch, setExerciseLibrarySearch] = useState('');
+  const [ingredientLibrarySearch, setIngredientLibrarySearch] = useState('');
   const [dragInfo, setDragInfo] = useState(null);
   const weekGridRef = useRef(null);
-  const dragClickRef = useRef(false);
+  const eventPointerTargetRef = useRef(null);
+  const eventClickInfoRef = useRef({ startTime: 0, startX: 0, startY: 0, eventId: null, pointerId: null });
+  const cellClickInfoRef = useRef({ startTime: 0, startX: 0, startY: 0, date: null, pointerId: null });
+  const CLICK_MAX_DURATION = 500;
+  const CLICK_DRAG_THRESHOLD = 5;
 
   const [statusMessage, setStatusMessage] = useState('');
   const [theme, setTheme] = useState('light');
@@ -162,7 +185,7 @@ function App() {
     items: [],
   });
   const [scheduleForm, setScheduleForm] = useState({
-    category: '💼 Work / Meeting',
+    category: 'Work',
     title: '',
     date: formatDate(new Date()),
     start_time: '',
@@ -200,13 +223,33 @@ function App() {
   );
   const currentDayEvents = eventsByDate[currentDay] || [];
   const todayWorkouts = useMemo(
-    () => dayEvents.filter((event) => event.event_type === '🏋️ Training Session'),
+    () => dayEvents.filter((event) => event.event_type === 'Training'),
     [dayEvents],
   );
   const todayMeals = useMemo(
-    () => dayEvents.filter((event) => event.event_type === '🥗 Meal/Nutrition'),
+    () => dayEvents.filter((event) => event.event_type === 'Meal'),
     [dayEvents],
   );
+
+  const filteredExercises = useMemo(() => {
+    const query = exerciseLibrarySearch.trim().toLowerCase();
+    if (!query) return exercises;
+    return exercises.filter((exercise) => {
+      const name = exercise.name?.toLowerCase() || '';
+      const category = exercise.category?.toLowerCase() || '';
+      return name.includes(query) || category.includes(query);
+    });
+  }, [exercises, exerciseLibrarySearch]);
+
+  const filteredIngredients = useMemo(() => {
+    const query = ingredientLibrarySearch.trim().toLowerCase();
+    if (!query) return ingredients;
+    return ingredients.filter((item) => {
+      const name = item.name?.toLowerCase() || '';
+      const category = item.category?.toLowerCase() || '';
+      return name.includes(query) || category.includes(query);
+    });
+  }, [ingredients, ingredientLibrarySearch]);
 
   const scheduledMinutes = useMemo(() => {
     return dayEvents.reduce((sum, event) => {
@@ -217,15 +260,15 @@ function App() {
   const freeMinutes = clampedMinutes(18 * 60 - scheduledMinutes);
   const freeTimeLabel = `${Math.floor(freeMinutes / 60)}h ${freeMinutes % 60}m free`;
 
-  const weekRangeLabel = `${new Date(weekViewRange.start).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(weekViewRange.end).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+  const weekRangeLabel = `${new Date(new Date(weekViewRange.start).setDate(new Date(weekViewRange.start).getDate() + 1)).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(new Date(weekViewRange.end).setDate(new Date(weekViewRange.end).getDate() + 1)).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
   const dayRangeLabel = `${new Date(currentDay).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 
   const activeEventClasses = {
-    work: '💼 Work / Meeting',
-    training: '🏋️ Training Session',
-    meal: '🥗 Meal/Nutrition',
-    commute: '🚗 Commute',
-    social: '🗓️ Social / Life',
+    work: 'Work',
+    training: 'Training',
+    meal: 'Meal',
+    commute: 'Commute',
+    social: 'Social',
   };
 
   useEffect(() => {
@@ -241,15 +284,26 @@ function App() {
   }, [scheduleView, selectedDate]);
 
   useEffect(() => {
-    if ((scheduleView === 'week' || scheduleView === 'day') && weekGridRef.current && currentDayEvents.length) {
-      const nextEvent = currentDayEvents.find((event) => event.start_time);
-      if (nextEvent) {
-        const [hour, minute] = nextEvent.start_time.split(':').map(Number);
-        const position = Math.max(0, (hour + minute / 60 - 1) * CALENDAR_ROW_HEIGHT);
-        weekGridRef.current.scrollTop = position;
-      }
+    if (!(scheduleView === 'week' || scheduleView === 'day') || !weekGridRef.current) {
+      return;
     }
-  }, [scheduleView, currentDayEvents]);
+
+    const viewEvents = scheduleView === 'week'
+      ? weekDates.flatMap((day) => eventsByDate[day.date] || [])
+      : currentDayEvents;
+
+    const nextEvent = viewEvents.find((event) => event.start_time);
+    if (!nextEvent) {
+      return;
+    }
+
+    const [hour, minute] = nextEvent.start_time.split(':').map(Number);
+    const position = scheduleView === 'week'
+      ? Math.max(0, (hour + minute / 60 - 1) * CALENDAR_ROW_HEIGHT)
+      : Math.max(0, (hour + minute / 60) * CALENDAR_ROW_HEIGHT);
+
+    weekGridRef.current.scrollTop = position;
+  }, [scheduleView, currentDayEvents, eventsByDate, weekDates]);
 
   async function fetchJson(path, options = {}) {
     const response = await fetch(`${API_URL}${path}`, options);
@@ -357,22 +411,30 @@ function App() {
 
   function handleExerciseModalOpen() {
     setExerciseForm({ name: '', category: '', one_rm: '' });
+    setEditingExercise(null);
     setExerciseModalVisible(true);
   }
 
-  function handleIngredientModalOpen() {
-    setIngredientForm({ name: '', kcal: '', cost: '', category: '' });
-    setIngredientModalVisible(true);
+  function openExerciseEdit(exercise) {
+    setExerciseForm({
+      name: exercise.name || '',
+      category: exercise.category || '',
+      one_rm: exercise.one_rm?.toString() || '',
+    });
+    setEditingExercise(exercise);
+    setExerciseModalVisible(true);
   }
 
-  async function handleAddExercise() {
+  async function handleSaveExercise() {
     if (!exerciseForm.name.trim()) {
       setStatusMessage('Exercise name is required.');
       return;
     }
     try {
-      await fetchJson('/exercises', {
-        method: 'POST',
+      const method = editingExercise ? 'PUT' : 'POST';
+      const url = editingExercise ? `/exercises/${editingExercise.id}` : '/exercises';
+      await fetchJson(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: exerciseForm.name.trim(),
@@ -382,11 +444,78 @@ function App() {
       });
       await fetchExercises();
       setExerciseModalVisible(false);
-      setStatusMessage('Exercise added.');
+      setEditingExercise(null);
+      setStatusMessage(editingExercise ? 'Exercise updated.' : 'Exercise added.');
     } catch (error) {
       setStatusMessage(error.message);
     }
   }
+
+  function openIngredientEdit(ingredient) {
+    setIngredientForm({
+      name: ingredient.name || '',
+      kcal: ingredient.kcal_per_100g?.toString() || '',
+      cost: ingredient.cost_per_100g?.toString() || '',
+      category: ingredient.category || '',
+    });
+    setEditingIngredient(ingredient);
+    setIngredientModalVisible(true);
+  }
+
+  async function handleSaveIngredient() {
+    if (!ingredientForm.name.trim()) {
+      setStatusMessage('Ingredient name is required.');
+      return;
+    }
+    try {
+      const method = editingIngredient ? 'PUT' : 'POST';
+      const url = editingIngredient ? `/ingredients/${editingIngredient.id}` : '/ingredients';
+      await fetchJson(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: ingredientForm.name.trim(),
+          kcal_per_100g: Number(ingredientForm.kcal) || 0,
+          cost_per_100g: Number(ingredientForm.cost) || 0,
+          category: ingredientForm.category.trim() || undefined,
+        }),
+      });
+      await fetchIngredients();
+      setIngredientModalVisible(false);
+      setEditingIngredient(null);
+      setStatusMessage(editingIngredient ? 'Ingredient updated.' : 'Ingredient added.');
+    } catch (error) {
+      setStatusMessage(error.message);
+    }
+  }
+
+  async function handleDeleteExercise(exerciseId) {
+    if (!window.confirm('Delete this exercise?')) return;
+    try {
+      await fetchJson(`/exercises/${exerciseId}`, { method: 'DELETE' });
+      await fetchExercises();
+      setStatusMessage('Exercise deleted.');
+    } catch (error) {
+      setStatusMessage(error.message);
+    }
+  }
+
+  async function handleDeleteIngredient(ingredientId) {
+    if (!window.confirm('Delete this ingredient?')) return;
+    try {
+      await fetchJson(`/ingredients/${ingredientId}`, { method: 'DELETE' });
+      await fetchIngredients();
+      setStatusMessage('Ingredient deleted.');
+    } catch (error) {
+      setStatusMessage(error.message);
+    }
+  }
+
+  function handleIngredientModalOpen() {
+    setIngredientForm({ name: '', kcal: '', cost: '', category: '' });
+    setIngredientModalVisible(true);
+  }
+
 
   async function handleAddIngredient() {
     if (!ingredientForm.name.trim()) {
@@ -653,15 +782,15 @@ function App() {
     const eventType = scheduleForm.category;
     const title = scheduleForm.title.trim() || scheduleForm.category.replace(/ .*/, '');
     let duration = Number(scheduleForm.duration_mins) || undefined;
-    if (eventType === '🏋️ Training Session' && scheduleForm.ref_workout_id) {
+    if (eventType === 'Training' && scheduleForm.ref_workout_id) {
       const workout = workouts.find((item) => item.id === Number(scheduleForm.ref_workout_id));
       duration = workout?.duration_mins || duration;
     }
-    if (eventType === '🥗 Meal/Nutrition' && scheduleForm.ref_recipe_id) {
+    if (eventType === 'Meal' && scheduleForm.ref_recipe_id) {
       const recipe = recipes.find((item) => item.id === Number(scheduleForm.ref_recipe_id));
       duration = recipe?.time_to_cook_mins || duration;
     }
-    if (eventType === '🗓️ Social / Life' && scheduleForm.min_duration && scheduleForm.max_duration) {
+    if (eventType === 'Social' && scheduleForm.min_duration && scheduleForm.max_duration) {
       duration = Math.round((Number(scheduleForm.min_duration) + Number(scheduleForm.max_duration)) / 2);
     }
     try {
@@ -729,83 +858,258 @@ function App() {
   }
 
   function handleCalendarCellClick(event, date) {
-    if (dragClickRef.current) {
-      dragClickRef.current = false;
+    if (dragInfo || event.pointerType === 'mouse' && event.buttons !== 0) {
       return;
     }
     const cell = event.currentTarget;
-    const time = parseCellTime(event.clientY, cell.getBoundingClientRect().top);
+    const hour = Number(cell.dataset.hour || 0);
+    const rect = cell.getBoundingClientRect();
+    const minute = Math.round(((event.clientY - rect.top) / rect.height) * 60 / 15) * 15;
+    const finalMinute = minute === 60 ? 0 : minute;
+    const time = `${hour.toString().padStart(2, '0')}:${finalMinute.toString().padStart(2, '0')}`;
     openEventModal('work', time, date);
   }
 
   function handleEventDragStart(event, calendarEvent) {
     event.stopPropagation();
-    dragClickRef.current = false;
+    const initialDayIndex = weekDates.findIndex((day) => day.date === calendarEvent.event_date);
     setDragInfo({
       type: 'move',
       event: calendarEvent,
+      originX: event.clientX,
       originY: event.clientY,
       initialStart: calendarEvent.start_time || '08:00',
       initialDuration: Number(calendarEvent.duration_mins) || 60,
+      initialDayIndex,
       deltaMinutes: 0,
+      dragged: false,
     });
   }
 
   function handleEventResizeStart(event, calendarEvent) {
     event.stopPropagation();
-    dragClickRef.current = false;
     setDragInfo({
       type: 'resize',
       event: calendarEvent,
       originY: event.clientY,
       initialDuration: Number(calendarEvent.duration_mins) || 60,
       deltaMinutes: 0,
+      dragged: false,
     });
+  }
+
+  function resetEventClickInfo() {
+    eventClickInfoRef.current = { startTime: 0, startX: 0, startY: 0, eventId: null, pointerId: null };
+  }
+
+  function resetCellClickInfo() {
+    cellClickInfoRef.current = { startTime: 0, startX: 0, startY: 0, date: null, pointerId: null };
+  }
+
+  function handleCellPointerDown(event, date) {
+    event.stopPropagation();
+    event.preventDefault();
+    cellClickInfoRef.current = {
+      startTime: Date.now(),
+      startX: event.clientX,
+      startY: event.clientY,
+      date,
+      pointerId: event.pointerId,
+    };
+  }
+
+  function handleCellPointerUp(event, date) {
+    event.stopPropagation();
+    event.preventDefault();
+
+    const clickInfo = cellClickInfoRef.current;
+    const duration = Date.now() - clickInfo.startTime;
+    const distanceMovedX = Math.abs(event.clientX - clickInfo.startX);
+    const distanceMovedY = Math.abs(event.clientY - clickInfo.startY);
+
+    resetCellClickInfo();
+    if (dragInfo) {
+      return;
+    }
+    if (clickInfo.pointerId !== event.pointerId || clickInfo.date !== date) {
+      return;
+    }
+    if (duration <= CLICK_MAX_DURATION && distanceMovedX <= CLICK_DRAG_THRESHOLD && distanceMovedY <= CLICK_DRAG_THRESHOLD) {
+      const cell = event.currentTarget;
+      const hour = Number(cell.dataset.hour || 0);
+      const rect = cell.getBoundingClientRect();
+      const minute = Math.round(((event.clientY - rect.top) / rect.height) * 60 / 15) * 15;
+      const finalMinute = minute === 60 ? 0 : minute;
+      const time = `${hour.toString().padStart(2, '0')}:${finalMinute.toString().padStart(2, '0')}`;
+      openEventModal('work', time, date);
+    }
+  }
+
+  function handleEventPointerDown(event, calendarEvent) {
+    event.stopPropagation();
+    event.preventDefault();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      eventPointerTargetRef.current = event.currentTarget;
+    } catch (err) {
+      eventPointerTargetRef.current = event.currentTarget;
+    }
+    eventClickInfoRef.current = {
+      startTime: Date.now(),
+      startX: event.clientX,
+      startY: event.clientY,
+      eventId: calendarEvent.id,
+      pointerId: event.pointerId,
+    };
+    handleEventDragStart(event, calendarEvent);
+  }
+
+  async function completeEventPointerUp(event, fallbackEvent) {
+    if (eventPointerTargetRef.current) {
+      try {
+        eventPointerTargetRef.current.releasePointerCapture(event.pointerId);
+      } catch (err) {
+        // ignore if capture already released
+      }
+      eventPointerTargetRef.current = null;
+    }
+
+    const activeDrag = dragInfo;
+    const clickInfo = eventClickInfoRef.current;
+    const targetEvent = activeDrag?.event || fallbackEvent;
+    const wasDragged = activeDrag?.dragged;
+
+    if (!targetEvent || !activeDrag) {
+      resetEventClickInfo();
+      resetCellClickInfo();
+      setDragInfo(null);
+      return;
+    }
+
+    setDragInfo(null);
+    resetEventClickInfo();
+    resetCellClickInfo();
+
+    if (wasDragged) {
+      const updatedEvent = {
+        ...activeDrag.event,
+        event_date: activeDrag.currentDate || activeDrag.event.event_date,
+        start_time: activeDrag.currentStart || activeDrag.event.start_time,
+        duration_mins: activeDrag.currentDuration || activeDrag.event.duration_mins,
+      };
+      await saveDraggedEvent(updatedEvent);
+    } else if (clickInfo.pointerId === event.pointerId && clickInfo.eventId === targetEvent.id) {
+      const duration = Date.now() - clickInfo.startTime;
+      const distanceMovedX = Math.abs(event.clientX - clickInfo.startX);
+      const distanceMovedY = Math.abs(event.clientY - clickInfo.startY);
+      if (duration <= CLICK_MAX_DURATION && distanceMovedX <= CLICK_DRAG_THRESHOLD && distanceMovedY <= CLICK_DRAG_THRESHOLD) {
+        openEventDetails(targetEvent);
+      }
+    }
+  }
+
+  function handleEventPointerUp(event, calendarEvent) {
+    event.stopPropagation();
+    event.preventDefault();
+    completeEventPointerUp(event, calendarEvent);
+  }
+
+  function handlePointerCancel(event) {
+    if (eventPointerTargetRef.current) {
+      try {
+        eventPointerTargetRef.current.releasePointerCapture(event.pointerId);
+      } catch (err) {
+        // ignore
+      }
+      eventPointerTargetRef.current = null;
+    }
+    resetEventClickInfo();
+    resetCellClickInfo();
+    setDragInfo(null);
+  }
+
+  async function saveDraggedEvent(draggedEvent) {
+    setEvents((prev) => prev.map((ev) => ev.id === draggedEvent.id ? { ...ev, ...draggedEvent } : ev));
+    try {
+      await fetchJson(`/calendar/${draggedEvent.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: draggedEvent.title,
+          event_type: draggedEvent.event_type,
+          event_date: draggedEvent.event_date,
+          start_time: draggedEvent.start_time || undefined,
+          duration_mins: Number(draggedEvent.duration_mins) || undefined,
+          ref_workout_id: draggedEvent.ref_workout_id ? Number(draggedEvent.ref_workout_id) : undefined,
+          ref_recipe_id: draggedEvent.ref_recipe_id ? Number(draggedEvent.ref_recipe_id) : undefined,
+          notes: draggedEvent.notes || undefined,
+        }),
+      });
+      setStatusMessage('Event updated.');
+      await loadScheduleRange();
+    } catch (error) {
+      setStatusMessage(error.message);
+      await loadScheduleRange();
+    }
   }
 
   function handlePointerMove(event) {
     if (!dragInfo) return;
     event.preventDefault();
-    const deltaMinutes = Math.round(((event.clientY - dragInfo.originY) / CALENDAR_ROW_HEIGHT) * 60 / 15) * 15;
+    const deltaY = event.clientY - dragInfo.originY;
+    const deltaX = dragInfo.type === 'move' ? event.clientX - dragInfo.originX : 0;
+    const deltaMinutes = Math.round((deltaY / CALENDAR_ROW_HEIGHT) * 60 / 15) * 15;
+
+    let newDate = dragInfo.event.event_date;
+    let newStart = dragInfo.initialStart;
+    let newDuration = dragInfo.initialDuration;
+
     if (dragInfo.type === 'move') {
+      const gridRect = weekGridRef.current?.getBoundingClientRect();
+      const availableWidth = gridRect ? gridRect.width - 120 : 0;
+      const columnWidth = availableWidth / 7;
+      const dayShift = columnWidth ? Math.round(deltaX / columnWidth) : 0;
+      const newDayIndex = Math.min(6, Math.max(0, (dragInfo.initialDayIndex || 0) + dayShift));
+      if (weekDates[newDayIndex]) {
+        newDate = weekDates[newDayIndex].date;
+      }
       const [originalHour, originalMinutes] = dragInfo.initialStart.split(':').map((value) => Number(value || 0));
       const totalMinutes = originalHour * 60 + originalMinutes + deltaMinutes;
       const clampedMinutes = Math.max(0, Math.min(23 * 60 + 45, totalMinutes));
       const newHour = Math.floor(clampedMinutes / 60);
       const newMinute = clampedMinutes % 60;
-      const time = `${newHour.toString().padStart(2, '0')}:${newMinute.toString().padStart(2, '0')}`;
-      setScheduleForm((prev) => ({ ...prev, start_time: time, date: dragInfo.event.event_date }));
-      setDragInfo((prev) => ({ ...prev, deltaMinutes, originY: prev.originY }));
-      if (Math.abs(deltaMinutes) >= 5) dragClickRef.current = true;
+      newStart = `${newHour.toString().padStart(2, '0')}:${newMinute.toString().padStart(2, '0')}`;
+      setScheduleForm((prev) => ({ ...prev, start_time: newStart, date: newDate }));
     } else if (dragInfo.type === 'resize') {
-      const newDuration = Math.max(15, dragInfo.initialDuration + deltaMinutes);
+      newDuration = Math.max(15, dragInfo.initialDuration + deltaMinutes);
       setScheduleForm((prev) => ({ ...prev, duration_mins: newDuration.toString() }));
-      setDragInfo((prev) => ({ ...prev, deltaMinutes }));
-      if (Math.abs(deltaMinutes) >= 5) dragClickRef.current = true;
     }
+
+    setDragInfo((prev) => ({
+      ...prev,
+      deltaMinutes,
+      dragged: prev ? (prev.dragged || Math.abs(deltaY) >= 5 || Math.abs(deltaX) >= 10) : false,
+      currentDate: newDate,
+      currentStart: newStart,
+      currentDuration: newDuration
+    }));
   }
 
   useEffect(() => {
     if (!dragInfo) return undefined;
     const moveHandler = (event) => handlePointerMove(event);
-    const upHandler = () => {
-      handlePointerUp();
+    const upHandler = (event) => {
+      completeEventPointerUp(event, dragInfo?.event);
     };
     window.addEventListener('pointermove', moveHandler);
     window.addEventListener('pointerup', upHandler);
+    window.addEventListener('pointercancel', handlePointerCancel);
     return () => {
       window.removeEventListener('pointermove', moveHandler);
       window.removeEventListener('pointerup', upHandler);
+      window.removeEventListener('pointercancel', handlePointerCancel);
     };
   }, [dragInfo]);
-
-  function handlePointerUp() {
-    if (!dragInfo) return;
-    const event = dragInfo.event;
-    setSelectedEvent(event);
-    setEventModalVisible(true);
-    setDragInfo(null);
-  }
 
   function performanceFieldKey(eventId, exerciseId) {
     return `${eventId}_${exerciseId}`;
@@ -967,10 +1271,11 @@ function App() {
             <div className="sub-tabs">
               <button className={plannerTab === 'build' ? 'active' : ''} onClick={() => setPlannerTab('build')}>Recipe Builder</button>
               <button className={plannerTab === 'list' ? 'active' : ''} onClick={() => setPlannerTab('list')}>My Recipes</button>
+              <button className={plannerTab === 'ingredients' ? 'active' : ''} onClick={() => setPlannerTab('ingredients')}>Ingredients</button>
             </div>
 
             {plannerTab === 'build' ? (
-              <div className="form-grid two-column">
+              <div className="form-grid">
                 <div className="panel form-card">
                   <h2>Recipe details</h2>
                   <label>Name</label>
@@ -1003,20 +1308,8 @@ function App() {
                   </div>
                   <button className="primary-button" onClick={saveRecipe}>Save recipe</button>
                 </div>
-
-                <div className="panel summary-card">
-                  <h2>Recipe preview</h2>
-                  {recipeForm.items.length ? (
-                    recipeForm.items.map((item, index) => (
-                      <div key={index} className="preview-row">
-                        <span>{item.name}</span>
-                        <span>{item.quantity_g}g</span>
-                      </div>
-                    ))
-                  ) : <div className="empty-state">Add ingredients to build a recipe.</div>}
-                </div>
               </div>
-            ) : (
+            ) : plannerTab === 'list' ? (
               <div className="panel list-card">
                 <div className="section-title">
                   <h2>My saved recipes</h2>
@@ -1037,6 +1330,34 @@ function App() {
                   )) : <div className="empty-state">No recipes yet.</div>}
                 </div>
               </div>
+            ) : (
+              <div className="panel list-card">
+                <div className="section-title">
+                  <h2>Ingredient library</h2>
+                  <button className="primary-button" onClick={handleIngredientModalOpen}>Add ingredient</button>
+                </div>
+                <div className="search-row">
+                  <input
+                    value={ingredientLibrarySearch}
+                    onChange={(e) => setIngredientLibrarySearch(e.target.value)}
+                    placeholder="Search ingredients"
+                  />
+                </div>
+                <div className="exercise-list-scroll">
+                  {filteredIngredients.length ? filteredIngredients.map((ingredient) => (
+                    <div key={ingredient.id} className="entity-card">
+                      <div>
+                        <strong>{ingredient.name}</strong>
+                        <span>{ingredient.kcal_per_100g} kcal / 100g</span>
+                      </div>
+                      <div className="action-row">
+                        <button onClick={() => openIngredientEdit(ingredient)}>Edit</button>
+                        <button className="action-delete" onClick={() => handleDeleteIngredient(ingredient.id)}>Delete</button>
+                      </div>
+                    </div>
+                  )) : <div className="empty-state">No ingredients found.</div>}
+                </div>
+              </div>
             )}
           </section>
         )}
@@ -1046,10 +1367,11 @@ function App() {
             <div className="sub-tabs">
               <button className={trainingTab === 'build' ? 'active' : ''} onClick={() => setTrainingTab('build')}>Workout Builder</button>
               <button className={trainingTab === 'list' ? 'active' : ''} onClick={() => setTrainingTab('list')}>My Workouts</button>
+              <button className={trainingTab === 'exercises' ? 'active' : ''} onClick={() => setTrainingTab('exercises')}>Exercises</button>
             </div>
 
             {trainingTab === 'build' ? (
-              <div className="form-grid two-column">
+              <div className="form-grid">
                 <div className="panel form-card">
                   <h2>Workout details</h2>
                   <label>Name</label>
@@ -1086,22 +1408,8 @@ function App() {
                   </div>
                   <button className="primary-button" onClick={saveWorkout}>Save workout</button>
                 </div>
-
-                <div className="panel summary-card">
-                  <h2>Exercise library</h2>
-                  <div className="list-group compact">
-                    {exercises.length ? exercises.map((exercise) => (
-                      <div key={exercise.id} className="entity-card small">
-                        <div>
-                          <strong>{exercise.name}</strong>
-                          <span>{exercise.one_rm ? `${exercise.one_rm} 1RM` : 'No 1RM yet'}</span>
-                        </div>
-                      </div>
-                    )) : <div className="empty-state">Add exercises to get started.</div>}
-                  </div>
-                </div>
               </div>
-            ) : (
+            ) : trainingTab === 'list' ? (
               <div className="panel list-card">
                 <div className="section-title">
                   <h2>My saved workouts</h2>
@@ -1120,6 +1428,34 @@ function App() {
                       </div>
                     </div>
                   )) : <div className="empty-state">No workouts yet.</div>}
+                </div>
+              </div>
+            ) : (
+              <div className="panel list-card">
+                <div className="section-title">
+                  <h2>Exercise library</h2>
+                  <button className="primary-button" onClick={handleExerciseModalOpen}>Add exercise</button>
+                </div>
+                <div className="search-row">
+                  <input
+                    value={exerciseLibrarySearch}
+                    onChange={(e) => setExerciseLibrarySearch(e.target.value)}
+                    placeholder="Search exercises"
+                  />
+                </div>
+                <div className="exercise-list-scroll">
+                  {filteredExercises.length ? filteredExercises.map((exercise) => (
+                    <div key={exercise.id} className="entity-card">
+                      <div>
+                        <strong>{exercise.name}</strong>
+                        <span>{exercise.one_rm ? `${exercise.one_rm} 1RM` : 'No 1RM yet'}</span>
+                      </div>
+                      <div className="action-row">
+                        <button onClick={() => openExerciseEdit(exercise)}>Edit</button>
+                        <button className="action-delete" onClick={() => handleDeleteExercise(exercise.id)}>Delete</button>
+                      </div>
+                    </div>
+                  )) : <div className="empty-state">No exercises found.</div>}
                 </div>
               </div>
             )}
@@ -1142,6 +1478,13 @@ function App() {
                   <span className="button-icon">＋</span>
                   Add event
                 </button>
+              </div>
+              <div className="schedule-legend">
+                {Object.entries(eventColors).map(([type, color]) => (
+                  <span key={type} className="legend-pill" style={{ background: color }}>
+                    {type.replace(/ .*/, '')}
+                  </span>
+                ))}
               </div>
             </div>
 
@@ -1214,7 +1557,8 @@ function App() {
                               key={`${day.date}-${row.hour}`}
                               type="button"
                               className="week-grid-cell"
-                              onClick={(e) => handleCalendarCellClick(e, day.date)}
+                              onPointerDown={(e) => handleCellPointerDown(e, day.date)}
+                              onPointerUp={(e) => handleCellPointerUp(e, day.date)}
                               data-hour={row.hour}
                             />
                           ))}
@@ -1225,7 +1569,7 @@ function App() {
                           const [startHour, startMinutes] = (event.start_time || '00:00').split(':').map(Number);
                           const startTotal = startHour * 60 + (startMinutes || 0);
                           const duration = Number(event.duration_mins) || 60;
-                          const top = (startTotal / 60) * CALENDAR_ROW_HEIGHT;
+                          const top = 56 + (startTotal / 60) * CALENDAR_ROW_HEIGHT;
                           const height = Math.max(30, (duration / 60) * CALENDAR_ROW_HEIGHT);
                           const dragDelta = dragInfo?.event?.id === event.id ? dragInfo.deltaMinutes || 0 : 0;
                           const offsetTop = dragInfo?.type === 'move' && dragInfo.event.id === event.id
@@ -1244,15 +1588,10 @@ function App() {
                                 height: `${Math.max(30, height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT)}px`,
                                 left: `calc(120px + (${index} * ((100% - 120px) / 7)) + 8px)`,
                                 width: `calc((100% - 120px) / 7 - 16px)`,
+                                background: eventColors[event.event_type],
                               }}
-                              onClick={(e) => {
-                                if (dragClickRef.current) {
-                                  dragClickRef.current = false;
-                                  return;
-                                }
-                                openEventEdit(event);
-                              }}
-                              onPointerDown={(e) => handleEventDragStart(e, event)}
+                              onPointerDown={(e) => handleEventPointerDown(e, event)}
+                              onPointerUp={(e) => handleEventPointerUp(e, event)}
                             >
                               <strong>{event.title || event.event_type.replace(/ .*/, '')}</strong>
                               <small>{event.start_time || 'All day'}</small>
@@ -1285,7 +1624,8 @@ function App() {
                             key={`${row.hour}-cell`}
                             type="button"
                             className="day-grid-cell"
-                            onClick={(e) => handleCalendarCellClick(e, currentDay)}
+                            onPointerDown={(e) => handleCellPointerDown(e, currentDay)}
+                            onPointerUp={(e) => handleCellPointerUp(e, currentDay)}
                             data-hour={row.hour}
                           />
                         </React.Fragment>
@@ -1308,20 +1648,18 @@ function App() {
                             <button
                               key={event.id}
                               type="button"
-                              className={`event-block ${dragInfo?.event?.id === event.id ? 'dragging' : ''}`}
-                              style={{ top: `${top + offsetTop}px`, height: `${Math.max(30, height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT)}px` }}
-                              onClick={(e) => {
-                                if (dragClickRef.current) {
-                                  dragClickRef.current = false;
-                                  return;
-                                }
-                                openEventEdit(event);
+                              className={`event-block day-event-block ${dragInfo?.event?.id === event.id ? 'dragging' : ''}`}
+                              style={{
+                                top: `${top + offsetTop}px`,
+                                height: `${Math.max(30, height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT)}px`,
+                                background: eventColors[event.event_type],
                               }}
-                              onPointerDown={(e) => handleEventDragStart(e, event)}
+                              onPointerDown={(e) => handleEventPointerDown(e, event)}
+                              onPointerUp={(e) => handleEventPointerUp(e, event)}
                             >
                               <strong>{event.title || event.event_type.replace(/ .*/, '')}</strong>
                               <small>{event.start_time || 'All day'}</small>
-                              <div className="resize-handle" onPointerDown={(e) => handleEventResizeStart(e, event)} />
+                              <div className="resize-handle" onPointerDown={(e) => { e.stopPropagation(); handleEventResizeStart(e, event); }} />
                             </button>
                           );
                         })}
@@ -1357,13 +1695,13 @@ function App() {
               <input type="date" name="date" value={scheduleForm.date} onChange={handleEventFormChange} />
               <label>Start time</label>
               <input type="time" name="start_time" value={scheduleForm.start_time} onChange={handleEventFormChange} />
-              {scheduleForm.category === '💼 Work / Meeting' && (
+              {scheduleForm.category === 'Work' && (
                 <>
                   <label>Duration (mins)</label>
                   <input type="number" name="duration_mins" value={scheduleForm.duration_mins} onChange={handleEventFormChange} placeholder="60" />
                 </>
               )}
-              {scheduleForm.category === '🏋️ Training Session' && (
+              {scheduleForm.category === 'Training' && (
                 <>
                   <label>Workout</label>
                   <select name="ref_workout_id" value={scheduleForm.ref_workout_id} onChange={handleEventFormChange}>
@@ -1374,7 +1712,7 @@ function App() {
                   <input type="text" value={`${getSelectedWorkoutDuration() || 'Auto'}`} disabled />
                 </>
               )}
-              {scheduleForm.category === '🥗 Meal/Nutrition' && (
+              {scheduleForm.category === 'Meal' && (
                 <>
                   <label>Recipe</label>
                   <select name="ref_recipe_id" value={scheduleForm.ref_recipe_id} onChange={handleEventFormChange}>
@@ -1385,13 +1723,13 @@ function App() {
                   <input type="text" value={`${getSelectedRecipeDuration() || 'Auto'}`} disabled />
                 </>
               )}
-              {scheduleForm.category === '🚗 Commute' && (
+              {scheduleForm.category === 'Commute' && (
                 <>
                   <label>Duration (mins)</label>
                   <input type="number" name="duration_mins" value={scheduleForm.duration_mins} onChange={handleEventFormChange} placeholder="30" />
                 </>
               )}
-              {scheduleForm.category === '🗓️ Social / Life' && (
+              {scheduleForm.category === 'Social' && (
                 <>
                   <label>Minimum duration (mins)</label>
                   <input type="number" name="min_duration" value={scheduleForm.min_duration} onChange={handleEventFormChange} placeholder="30" />
@@ -1412,7 +1750,7 @@ function App() {
         {exerciseModalVisible && (
           <div className="modal-overlay" onClick={() => setExerciseModalVisible(false)}>
             <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-              <h3>Add exercise</h3>
+              <h3>{editingExercise ? 'Edit exercise' : 'Add exercise'}</h3>
               <label>Name</label>
               <input value={exerciseForm.name} onChange={(e) => setExerciseForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Barbell Back Squat" />
               <label>Category</label>
@@ -1421,7 +1759,7 @@ function App() {
               <input value={exerciseForm.one_rm} onChange={(e) => setExerciseForm((prev) => ({ ...prev, one_rm: e.target.value }))} placeholder="225" />
               <div className="modal-actions">
                 <button className="secondary-button" onClick={() => setExerciseModalVisible(false)}>Cancel</button>
-                <button className="primary-button" onClick={handleAddExercise}>Save</button>
+                <button className="primary-button" onClick={handleSaveExercise}>{editingExercise ? 'Save changes' : 'Save'}</button>
               </div>
             </div>
           </div>
@@ -1430,7 +1768,7 @@ function App() {
         {ingredientModalVisible && (
           <div className="modal-overlay" onClick={() => setIngredientModalVisible(false)}>
             <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-              <h3>Add ingredient</h3>
+              <h3>{editingIngredient ? 'Edit ingredient' : 'Add ingredient'}</h3>
               <label>Name</label>
               <input value={ingredientForm.name} onChange={(e) => setIngredientForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Chicken Breast" />
               <label>Calories / 100g</label>
@@ -1441,13 +1779,13 @@ function App() {
               <input value={ingredientForm.category} onChange={(e) => setIngredientForm((prev) => ({ ...prev, category: e.target.value }))} placeholder="Meat & Poultry" />
               <div className="modal-actions">
                 <button className="secondary-button" onClick={() => setIngredientModalVisible(false)}>Cancel</button>
-                <button className="primary-button" onClick={handleAddIngredient}>Save</button>
+                <button className="primary-button" onClick={handleSaveIngredient}>{editingIngredient ? 'Save changes' : 'Save'}</button>
               </div>
             </div>
           </div>
         )}
 
-        {selectedEvent && (
+        {selectedEvent && !eventModalVisible && (
           <div className="modal-overlay" onClick={() => setSelectedEvent(null)}>
             <div className="modal-card" onClick={(e) => e.stopPropagation()}>
               <h3>Event details</h3>
@@ -1458,6 +1796,7 @@ function App() {
               <p>{selectedEvent.notes || 'No notes'}</p>
               <div className="modal-actions">
                 <button className="secondary-button" onClick={() => setSelectedEvent(null)}>Close</button>
+                <button className="secondary-button" onClick={() => openEventEdit(selectedEvent)}>Edit</button>
                 <button className="action-delete" onClick={() => handleDeleteEvent(selectedEvent.id)}>Delete</button>
               </div>
             </div>

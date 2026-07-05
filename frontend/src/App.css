@@ -352,7 +352,6 @@ h1 {
 }
 
 .card.compact-card,
-.entity-card,
 .day-block,
 .legend-item,
 .event-item,
@@ -362,8 +361,18 @@ h1 {
   border-radius: 20px;
 }
 
+.entity-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 14px 16px;
+}
+
 .card.compact-card,
-.entity-card,
 .event-item,
 .day-block {
   padding: 14px 16px;
@@ -588,6 +597,21 @@ button.active {
   box-shadow: var(--shadow);
 }
 
+.schedule-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.legend-pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .add-event-button {
   display: inline-flex;
   align-items: center;
@@ -760,9 +784,13 @@ button.active {
   position: relative;
 }
 
-.week-time-header,
-.day-time-cell {
+.week-time-header {
   grid-row: 1 / 2;
+  align-self: center;
+}
+
+.day-time-cell {
+  grid-column: 1;
   align-self: center;
 }
 
@@ -784,6 +812,10 @@ button.active {
   background: rgba(37, 99, 235, 0.05);
 }
 
+.day-grid-cell {
+  grid-column: 2;
+}
+
 .week-grid-events,
 .day-grid-events {
   position: absolute;
@@ -793,12 +825,27 @@ button.active {
 
 .event-block {
   position: absolute;
-  left: 8px;
-  right: 8px;
+  left: 0;
+  width: calc(100% - 16px);
   pointer-events: auto;
+  border: none;
+  color: var(--button-text);
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 18px;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.week-event-block {
+.event-block:hover {
+  opacity: 0.95;
+}
+
+.week-event-block,
+.day-event-block {
   width: auto;
 }
 
