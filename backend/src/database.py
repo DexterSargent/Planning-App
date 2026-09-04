@@ -16,6 +16,7 @@ lost) but adds:
 import json
 import pyodbc
 import threading
+import time
 from datetime import datetime, date, timedelta
 
 
@@ -78,11 +79,21 @@ class ThreadSafeSQLiteConnection:
 
 class DatabaseManager:
     def __init__(self, db_name="Driver={ODBC Driver 18 for SQL Server};Server=tcp:yourserver.database.windows.net,1433;Database=yourdb;Uid=youruser;Pwd=yourpassword;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"):
-        if "Driver=" in db_name:
-            raw_conn = pyodbc.connect(db_name, autocommit=True, timeout=30)
-        else:
-            # Fallback for dev if they pass a local string (though it expects an ODBC string)
-            raw_conn = pyodbc.connect(db_name, autocommit=True, timeout=30)
+        max_retries = 5
+        retry_delay = 5
+        raw_conn = None
+        for attempt in range(max_retries):
+            try:
+                raw_conn = pyodbc.connect(db_name, autocommit=True, timeout=30)
+                break
+            except pyodbc.Error as e:
+                # 40613 is Database not currently available (Azure SQL waking up)
+                if '40613' in str(e) and attempt < max_retries - 1:
+                    print(f"Database waking up, retrying in {retry_delay}s... (Attempt {attempt+1}/{max_retries})")
+                    time.sleep(retry_delay)
+                else:
+                    raise e
+                    
         self.lock = threading.RLock()
         self.conn = ThreadSafeSQLiteConnection(raw_conn, self.lock)
         with self.lock:
