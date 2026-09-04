@@ -14,7 +14,7 @@ FROM python:3.12-slim AS base
 
 # Install MS ODBC driver for Azure SQL
 RUN apt-get update && apt-get install -y curl apt-utils gnupg2 \
-    && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
     && curl https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \
     && env ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev \
