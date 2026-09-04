@@ -14,10 +14,34 @@ lost) but adds:
 """
 
 import json
-import sqlite3
+import pyodbc
 import threading
 from datetime import datetime, date, timedelta
 
+
+
+class PyODBCDictCursor:
+    def __init__(self, cursor):
+        self.cursor = cursor
+        
+    def execute(self, *args, **kwargs):
+        self.cursor.execute(*args, **kwargs)
+        return self
+        
+    def fetchall(self):
+        rows = self.cursor.fetchall()
+        if not rows: return []
+        cols = [column[0] for column in self.cursor.description]
+        return [dict(zip(cols, row)) for row in rows]
+        
+    def fetchone(self):
+        row = self.cursor.fetchone()
+        if not row: return None
+        cols = [column[0] for column in self.cursor.description]
+        return dict(zip(cols, row))
+        
+    def __getattr__(self, name):
+        return getattr(self.cursor, name)
 
 class ThreadSafeSQLiteConnection:
     def __init__(self, conn, lock):
@@ -26,15 +50,12 @@ class ThreadSafeSQLiteConnection:
 
     def execute(self, *args, **kwargs):
         with self._lock:
-            return self._conn.execute(*args, **kwargs)
-
-    def executemany(self, *args, **kwargs):
-        with self._lock:
-            return self._conn.executemany(*args, **kwargs)
-
-    def cursor(self, *args, **kwargs):
-        with self._lock:
-            return self._conn.cursor(*args, **kwargs)
+            cur = self._conn.cursor()
+            cur.execute(*args, **kwargs)
+            return PyODBCDictCursor(cur)
+            
+    def cursor(self):
+        return PyODBCDictCursor(self._conn.cursor())
 
     def commit(self):
         with self._lock:
@@ -54,14 +75,17 @@ class ThreadSafeSQLiteConnection:
             setattr(self._conn, name, value)
 
 
+
 class DatabaseManager:
-    def __init__(self, db_name="performance_hq.db"):
-        raw_conn = sqlite3.connect(db_name, check_same_thread=False, timeout=30)
-        raw_conn.row_factory = sqlite3.Row
+    def __init__(self, db_name="Driver={ODBC Driver 18 for SQL Server};Server=tcp:yourserver.database.windows.net,1433;Database=yourdb;Uid=youruser;Pwd=yourpassword;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"):
+        if "Driver=" in db_name:
+            raw_conn = pyodbc.connect(db_name, autocommit=True, timeout=30)
+        else:
+            # Fallback for dev if they pass a local string (though it expects an ODBC string)
+            raw_conn = pyodbc.connect(db_name, autocommit=True, timeout=30)
         self.lock = threading.RLock()
         self.conn = ThreadSafeSQLiteConnection(raw_conn, self.lock)
         with self.lock:
-            self.conn.execute("PRAGMA foreign_keys = ON;")
             self.create_tables()
             self._migrate()
             self._seed_initial_data()
@@ -73,205 +97,219 @@ class DatabaseManager:
         c = self.conn.cursor()
 
         # ---------- Master libraries ----------
-        c.execute("""CREATE TABLE IF NOT EXISTS ingredients (
-                        id INTEGER PRIMARY KEY,
-                        name TEXT NOT NULL UNIQUE,
-                        kcal_per_100g REAL NOT NULL,
-                        cost_per_100g REAL NOT NULL,
-                        category TEXT,
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='ingredients' and xtype='U')
+CREATE TABLE ingredients (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        name NVARCHAR(MAX) NOT NULL UNIQUE,
+                        kcal_per_100g FLOAT NOT NULL,
+                        cost_per_100g FLOAT NOT NULL,
+                        category NVARCHAR(MAX),
                         in_inventory INTEGER DEFAULT 0,
-                        created_at TIMESTAMP
+                        created_at DATETIME2
                     )""")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS exercises (
-                        id INTEGER PRIMARY KEY,
-                        name TEXT NOT NULL UNIQUE,
-                        category TEXT,
-                        one_rm REAL,
-                        created_at TIMESTAMP
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='exercises' and xtype='U')
+CREATE TABLE exercises (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        name NVARCHAR(MAX) NOT NULL UNIQUE,
+                        category NVARCHAR(MAX),
+                        one_rm FLOAT,
+                        created_at DATETIME2
                     )""")
 
         # ---------- Composed: recipes ----------
-        c.execute("""CREATE TABLE IF NOT EXISTS recipes (
-                        id INTEGER PRIMARY KEY,
-                        name TEXT NOT NULL,
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='recipes' and xtype='U')
+CREATE TABLE recipes (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        name NVARCHAR(MAX) NOT NULL,
                         total_kcal INTEGER DEFAULT 0,
-                        cost REAL DEFAULT 0,
+                        cost FLOAT DEFAULT 0,
                         time_to_cook_mins INTEGER DEFAULT 0,
                         servings INTEGER DEFAULT 1,
-                        instructions TEXT,
-                        tags TEXT,
-                        meal_type TEXT DEFAULT 'supper',
-                        created_at TIMESTAMP
+                        instructions NVARCHAR(MAX),
+                        tags NVARCHAR(MAX),
+                        meal_type NVARCHAR(MAX) DEFAULT 'supper',
+                        created_at DATETIME2
                     )""")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS recipe_ingredients (
-                        id INTEGER PRIMARY KEY,
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='recipe_ingredients' and xtype='U')
+CREATE TABLE recipe_ingredients (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
                         recipe_id INTEGER NOT NULL,
                         ingredient_id INTEGER NOT NULL,
-                        quantity_g REAL NOT NULL,
+                        quantity_g FLOAT NOT NULL,
                         FOREIGN KEY(recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
                         FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE RESTRICT
                     )""")
 
         # ---------- Composed: workouts ----------
-        c.execute("""CREATE TABLE IF NOT EXISTS workouts (
-                        id INTEGER PRIMARY KEY,
-                        name TEXT NOT NULL,
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='workouts' and xtype='U')
+CREATE TABLE workouts (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        name NVARCHAR(MAX) NOT NULL,
                         duration_mins INTEGER DEFAULT 0,
-                        location_type TEXT DEFAULT 'gym',
-                        created_at TIMESTAMP
+                        location_type NVARCHAR(MAX) DEFAULT 'gym',
+                        created_at DATETIME2
                     )""")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS workout_exercises (
-                        id INTEGER PRIMARY KEY,
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='workout_exercises' and xtype='U')
+CREATE TABLE workout_exercises (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
                         workout_id INTEGER NOT NULL,
                         exercise_id INTEGER NOT NULL,
                         sets INTEGER,
                         reps INTEGER,
-                        weight TEXT,
+                        weight NVARCHAR(MAX),
                         FOREIGN KEY(workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
                         FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE RESTRICT
                     )""")
 
         # ---------- Calendar ----------
-        c.execute("""CREATE TABLE IF NOT EXISTS calendar_events (
-                        id INTEGER PRIMARY KEY,
-                        title TEXT NOT NULL,
-                        event_type TEXT NOT NULL,
-                        event_date TEXT NOT NULL,
-                        start_time TEXT,
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='calendar_events' and xtype='U')
+CREATE TABLE calendar_events (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        title NVARCHAR(MAX) NOT NULL,
+                        event_type NVARCHAR(MAX) NOT NULL,
+                        event_date NVARCHAR(MAX) NOT NULL,
+                        start_time NVARCHAR(MAX),
                         duration_mins INTEGER,
                         ref_workout_id INTEGER,
                         ref_recipe_id INTEGER,
-                        notes TEXT,
-                        location_type TEXT,
-                        is_completed BOOLEAN DEFAULT 0,
-                        created_at TIMESTAMP,
+                        notes NVARCHAR(MAX),
+                        location_type NVARCHAR(MAX),
+                        is_completed BIT DEFAULT 0,
+                        created_at DATETIME2,
                         FOREIGN KEY(ref_workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
                         FOREIGN KEY(ref_recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
                     )""")
         try:
-            c.execute("ALTER TABLE calendar_events ADD COLUMN is_completed BOOLEAN DEFAULT 0")
-        except sqlite3.OperationalError:
+            c.execute("ALTER TABLE calendar_events ADD is_completed BIT DEFAULT 0")
+        except pyodbc.Error:
             pass
 
         # ---------- Analytics logs ----------
-        c.execute("""CREATE TABLE IF NOT EXISTS lift_logs (
-                        id INTEGER PRIMARY KEY,
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='lift_logs' and xtype='U')
+CREATE TABLE lift_logs (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
                         exercise_id INTEGER NOT NULL,
-                        log_date TEXT NOT NULL,
-                        weight TEXT NOT NULL,
+                        log_date NVARCHAR(MAX) NOT NULL,
+                        weight NVARCHAR(MAX) NOT NULL,
                         sets INTEGER,
                         reps INTEGER,
-                        created_at TIMESTAMP,
+                        created_at DATETIME2,
                         FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
                     )""")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS nutrition_logs (
-                        id INTEGER PRIMARY KEY,
-                        log_date TEXT NOT NULL,
-                        kcal REAL NOT NULL,
-                        cost REAL,
-                        created_at TIMESTAMP
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='nutrition_logs' and xtype='U')
+CREATE TABLE nutrition_logs (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        log_date NVARCHAR(MAX) NOT NULL,
+                        kcal FLOAT NOT NULL,
+                        cost FLOAT,
+                        created_at DATETIME2
                     )""")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS user_settings (
-                        key TEXT PRIMARY KEY,
-                        value TEXT
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='user_settings' and xtype='U')
+CREATE TABLE user_settings (
+                        key NVARCHAR(MAX) PRIMARY KEY,
+                        value NVARCHAR(MAX)
                     )""")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS grocery_lists (
-                        id INTEGER PRIMARY KEY,
-                        week_label TEXT NOT NULL,
-                        items_json TEXT NOT NULL,
-                        status TEXT DEFAULT 'active',
-                        created_at TIMESTAMP
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='grocery_lists' and xtype='U')
+CREATE TABLE grocery_lists (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        week_label NVARCHAR(MAX) NOT NULL,
+                        items_json NVARCHAR(MAX) NOT NULL,
+                        status NVARCHAR(MAX) DEFAULT 'active',
+                        created_at DATETIME2
                     )""")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS weekly_schedule_template (
-                        id INTEGER PRIMARY KEY,
-                        day_of_week TEXT NOT NULL,
-                        title TEXT NOT NULL,
-                        event_type TEXT NOT NULL,
-                        start_time TEXT,
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='weekly_schedule_template' and xtype='U')
+CREATE TABLE weekly_schedule_template (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        day_of_week NVARCHAR(MAX) NOT NULL,
+                        title NVARCHAR(MAX) NOT NULL,
+                        event_type NVARCHAR(MAX) NOT NULL,
+                        start_time NVARCHAR(MAX),
                         duration_mins INTEGER DEFAULT 60,
-                        meal_slot_type TEXT,
-                        notes TEXT,
+                        meal_slot_type NVARCHAR(MAX),
+                        notes NVARCHAR(MAX),
                         ref_workout_id INTEGER,
-                        location TEXT,
-                        location_type TEXT,
+                        location NVARCHAR(MAX),
+                        location_type NVARCHAR(MAX),
                         commute_to_mins INTEGER,
                         commute_from_mins INTEGER,
-                        created_at TIMESTAMP,
+                        created_at DATETIME2,
                         FOREIGN KEY(ref_workout_id) REFERENCES workouts(id) ON DELETE CASCADE
                     )""")
 
-        c.execute("CREATE INDEX IF NOT EXISTS idx_calendar_event_date ON calendar_events(event_date);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_body_logs_date ON body_logs(log_date);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_nutrition_logs_date ON nutrition_logs(log_date);")
+        c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_calendar_event_date') CREATE INDEX idx_calendar_event_date ON calendar_events(event_date)")
+        c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_lift_logs_exercise_date') CREATE INDEX idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date)")
+        c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_body_logs_date') CREATE INDEX idx_body_logs_date ON body_logs(log_date)")
+        c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_nutrition_logs_date') CREATE INDEX idx_nutrition_logs_date ON nutrition_logs(log_date)")
 
         self.conn.commit()
 
     def _migrate(self):
         """Add columns to older databases created by the original app."""
         c = self.conn.cursor()
-        existing_recipe_cols = {r["name"] for r in c.execute("PRAGMA table_info(recipes)")}
+        existing_recipe_cols = {r["COLUMN_NAME"] for r in c.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='recipes'")}
         if "servings" not in existing_recipe_cols:
-            c.execute("ALTER TABLE recipes ADD COLUMN servings INTEGER DEFAULT 1")
+            c.execute("ALTER TABLE recipes ADD servings INTEGER DEFAULT 1")
         if "instructions" not in existing_recipe_cols:
-            c.execute("ALTER TABLE recipes ADD COLUMN instructions TEXT")
+            c.execute("ALTER TABLE recipes ADD instructions NVARCHAR(MAX)")
         if "tags" not in existing_recipe_cols:
-            c.execute("ALTER TABLE recipes ADD COLUMN tags TEXT")
+            c.execute("ALTER TABLE recipes ADD tags NVARCHAR(MAX)")
         if "meal_type" not in existing_recipe_cols:
-            c.execute("ALTER TABLE recipes ADD COLUMN meal_type TEXT DEFAULT 'supper'")
+            c.execute("ALTER TABLE recipes ADD meal_type NVARCHAR(MAX) DEFAULT 'supper'")
 
-        existing_ing_cols = {r["name"] for r in c.execute("PRAGMA table_info(ingredients)")}
+        existing_ing_cols = {r["COLUMN_NAME"] for r in c.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ingredients'")}
         if "category" not in existing_ing_cols:
-            c.execute("ALTER TABLE ingredients ADD COLUMN category TEXT")
+            c.execute("ALTER TABLE ingredients ADD category NVARCHAR(MAX)")
         if "in_inventory" not in existing_ing_cols:
-            c.execute("ALTER TABLE ingredients ADD COLUMN in_inventory INTEGER DEFAULT 0")
+            c.execute("ALTER TABLE ingredients ADD in_inventory INTEGER DEFAULT 0")
 
-        existing_ex_cols = {r["name"] for r in c.execute("PRAGMA table_info(exercises)")}
+        existing_ex_cols = {r["COLUMN_NAME"] for r in c.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='exercises'")}
         if "one_rm" not in existing_ex_cols:
-            c.execute("ALTER TABLE exercises ADD COLUMN one_rm REAL")
+            c.execute("ALTER TABLE exercises ADD one_rm REAL")
 
-        existing_wo_cols = {r["name"] for r in c.execute("PRAGMA table_info(workouts)")}
+        existing_wo_cols = {r["COLUMN_NAME"] for r in c.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='workouts'")}
         if "location_type" not in existing_wo_cols:
-            c.execute("ALTER TABLE workouts ADD COLUMN location_type TEXT DEFAULT 'gym'")
+            c.execute("ALTER TABLE workouts ADD location_type NVARCHAR(MAX) DEFAULT 'gym'")
 
-        existing_cal_cols = {r["name"] for r in c.execute("PRAGMA table_info(calendar_events)")}
+        existing_cal_cols = {r["COLUMN_NAME"] for r in c.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='calendar_events'")}
         if "location_type" not in existing_cal_cols:
-            c.execute("ALTER TABLE calendar_events ADD COLUMN location_type TEXT")
+            c.execute("ALTER TABLE calendar_events ADD location_type NVARCHAR(MAX)")
 
-        existing_template_cols = {r["name"] for r in c.execute("PRAGMA table_info(weekly_schedule_template)")}
+        existing_template_cols = {r["COLUMN_NAME"] for r in c.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='weekly_schedule_template'")}
         if "ref_workout_id" not in existing_template_cols:
-            c.execute("ALTER TABLE weekly_schedule_template ADD COLUMN ref_workout_id INTEGER")
+            c.execute("ALTER TABLE weekly_schedule_template ADD ref_workout_id INTEGER")
         if "location" not in existing_template_cols:
-            c.execute("ALTER TABLE weekly_schedule_template ADD COLUMN location TEXT")
+            c.execute("ALTER TABLE weekly_schedule_template ADD location TEXT")
         if "location_type" not in existing_template_cols:
-            c.execute("ALTER TABLE weekly_schedule_template ADD COLUMN location_type TEXT")
+            c.execute("ALTER TABLE weekly_schedule_template ADD location_type NVARCHAR(MAX)")
         if "commute_to_mins" not in existing_template_cols:
-            c.execute("ALTER TABLE weekly_schedule_template ADD COLUMN commute_to_mins INTEGER")
+            c.execute("ALTER TABLE weekly_schedule_template ADD commute_to_mins INTEGER")
         if "commute_from_mins" not in existing_template_cols:
-            c.execute("ALTER TABLE weekly_schedule_template ADD COLUMN commute_from_mins INTEGER")
+            c.execute("ALTER TABLE weekly_schedule_template ADD commute_from_mins INTEGER")
 
-        c.execute("CREATE INDEX IF NOT EXISTS idx_calendar_event_date ON calendar_events(event_date);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_body_logs_date ON body_logs(log_date);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_nutrition_logs_date ON nutrition_logs(log_date);")
+        c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_calendar_event_date') CREATE INDEX idx_calendar_event_date ON calendar_events(event_date)")
+        c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_lift_logs_exercise_date') CREATE INDEX idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date)")
+        c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_body_logs_date') CREATE INDEX idx_body_logs_date ON body_logs(log_date)")
+        c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_nutrition_logs_date') CREATE INDEX idx_nutrition_logs_date ON nutrition_logs(log_date)")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS user_settings (
-                        key TEXT PRIMARY KEY,
-                        value TEXT
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='user_settings' and xtype='U')
+CREATE TABLE user_settings (
+                        key NVARCHAR(MAX) PRIMARY KEY,
+                        value NVARCHAR(MAX)
                     )""")
-        c.execute("""CREATE TABLE IF NOT EXISTS grocery_lists (
-                        id INTEGER PRIMARY KEY,
-                        week_label TEXT NOT NULL,
-                        items_json TEXT NOT NULL,
-                        status TEXT DEFAULT 'active',
-                        created_at TIMESTAMP
+        c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='grocery_lists' and xtype='U')
+CREATE TABLE grocery_lists (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        week_label NVARCHAR(MAX) NOT NULL,
+                        items_json NVARCHAR(MAX) NOT NULL,
+                        status NVARCHAR(MAX) DEFAULT 'active',
+                        created_at DATETIME2
                     )""")
 
         self.conn.commit()
@@ -280,14 +318,32 @@ class DatabaseManager:
         # Always sync/upsert our rich Toronto grocery set so existing databases get updated categories and accurate CAD pricing
         for name, kcal, cost, cat in TORONTO_GROCERY_INGREDIENTS:
             self.conn.execute(
-                "INSERT INTO ingredients (name, kcal_per_100g, cost_per_100g, category, in_inventory, created_at) VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT(name) DO UPDATE SET kcal_per_100g = excluded.kcal_per_100g, cost_per_100g = excluded.cost_per_100g, category = excluded.category",
+                """
+                MERGE INTO ingredients AS target
+                USING (SELECT ? AS name, ? AS kcal, ? AS cost, ? AS cat, ? AS created) AS source
+                ON target.name = source.name
+                WHEN MATCHED THEN
+                    UPDATE SET kcal_per_100g = source.kcal, cost_per_100g = source.cost, category = source.cat
+                WHEN NOT MATCHED THEN
+                    INSERT (name, kcal_per_100g, cost_per_100g, category, in_inventory, created_at)
+                    VALUES (source.name, source.kcal, source.cost, source.cat, 0, source.created);
+                """,
                 (name, kcal, cost, cat, datetime.now().isoformat()),
             )
 
         # Always sync/upsert our comprehensive exercise library so existing databases get multi-muscle categories
         for e, cat in EXERCISE_LIBRARY:
             self.conn.execute(
-                "INSERT INTO exercises (name, category, created_at) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET category = excluded.category",
+                """
+                MERGE INTO exercises AS target
+                USING (SELECT ? AS name, ? AS cat, ? AS created) AS source
+                ON target.name = source.name
+                WHEN MATCHED THEN
+                    UPDATE SET category = source.cat
+                WHEN NOT MATCHED THEN
+                    INSERT (name, category, created_at)
+                    VALUES (source.name, source.cat, source.created);
+                """,
                 (e, cat, datetime.now().isoformat()),
             )
         self.conn.commit()
@@ -349,11 +405,11 @@ class DatabaseManager:
     # ------------------------------------------------------------------
     def add_ingredient(self, name, kcal_per_100g, cost_per_100g, category=None, in_inventory=0):
         cur = self.conn.execute(
-            "INSERT INTO ingredients (name, kcal_per_100g, cost_per_100g, category, in_inventory, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO ingredients (name, kcal_per_100g, cost_per_100g, category, in_inventory, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)",
             (name, kcal_per_100g, cost_per_100g, category, int(in_inventory), datetime.now().isoformat()),
         )
         self.conn.commit()
-        return cur.lastrowid
+        return cur.fetchone()[0]
 
     def get_all_ingredients(self):
         rows = self.conn.execute("SELECT * FROM ingredients ORDER BY name").fetchall()
@@ -393,11 +449,11 @@ class DatabaseManager:
     # ------------------------------------------------------------------
     def add_exercise(self, name, category=None, one_rm=None):
         cur = self.conn.execute(
-            "INSERT INTO exercises (name, category, one_rm, created_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO exercises (name, category, one_rm, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
             (name, category, one_rm, datetime.now().isoformat()),
         )
         self.conn.commit()
-        return cur.lastrowid
+        return cur.fetchone()[0]
 
     def update_exercise(self, exercise_id, name, category=None, one_rm=None):
         self.conn.execute(
@@ -466,11 +522,11 @@ class DatabaseManager:
         total_kcal, total_cost = self._compute_recipe_totals(ingredient_list)
         cur = self.conn.execute(
             """INSERT INTO recipes (name, total_kcal, cost, time_to_cook_mins, servings,
-               instructions, tags, meal_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               instructions, tags, meal_type, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (name, total_kcal, total_cost, time_to_cook_mins, servings or 1,
              instructions, tags, meal_type or 'supper', datetime.now().isoformat()),
         )
-        recipe_id = cur.lastrowid
+        recipe_id = cur.fetchone()[0]
         for item in ingredient_list:
             self.conn.execute(
                 "INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity_g) VALUES (?, ?, ?)",
@@ -535,11 +591,11 @@ class DatabaseManager:
         cur = self.conn.execute(
             """INSERT INTO weekly_schedule_template 
                (day_of_week, title, event_type, start_time, duration_mins, meal_slot_type, notes, ref_workout_id, location, location_type, commute_to_mins, commute_from_mins, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (day_of_week, title, event_type, start_time, duration_mins, meal_slot_type, notes, ref_workout_id, location, location_type, commute_to_mins, commute_from_mins, datetime.now().isoformat())
         )
         self.conn.commit()
-        return cur.lastrowid
+        return cur.fetchone()[0]
 
     def delete_weekly_template_block(self, block_id):
         self.conn.execute("DELETE FROM weekly_schedule_template WHERE id = ?", (block_id,))
@@ -666,10 +722,10 @@ class DatabaseManager:
             duration_mins = sum((e.get("sets") or 0) for e in exercise_list) * 3
 
         cur = self.conn.execute(
-            "INSERT INTO workouts (name, duration_mins, location_type, created_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO workouts (name, duration_mins, location_type, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
             (name, duration_mins, location_type, datetime.now().isoformat()),
         )
-        workout_id = cur.lastrowid
+        workout_id = cur.fetchone()[0]
         for e in exercise_list:
             self.conn.execute(
                 "INSERT INTO workout_exercises (workout_id, exercise_id, sets, reps, weight) VALUES (?, ?, ?, ?, ?)",
@@ -730,12 +786,12 @@ class DatabaseManager:
         cur = self.conn.execute(
             """INSERT INTO calendar_events
                (title, event_type, event_date, start_time, duration_mins, ref_workout_id, ref_recipe_id, notes, location_type, is_completed, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (title, event_type, event_date, start_time, duration_mins,
              ref_workout_id, ref_recipe_id, notes, location_type, is_completed, datetime.now().isoformat()),
         )
         self.conn.commit()
-        return cur.lastrowid
+        return cur.fetchone()[0]
 
     def get_events_for_range(self, start_date, end_date):
         rows = self.conn.execute(
@@ -791,7 +847,7 @@ class DatabaseManager:
         if isinstance(weight, (list, tuple)):
             weight = ",".join(str(w) for w in weight)
         cur = self.conn.execute(
-            "INSERT INTO lift_logs (exercise_id, log_date, weight, sets, reps, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO lift_logs (exercise_id, log_date, weight, sets, reps, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)",
             (exercise_id, log_date, str(weight), sets, reps, datetime.now().isoformat()),
         )
         self.conn.commit()
@@ -804,7 +860,7 @@ class DatabaseManager:
                     self.refresh_exercise_1rm(exercise_id, new_one_rm)
             except ValueError:
                 pass
-        return cur.lastrowid
+        return cur.fetchone()[0]
     def update_lift_log(self, log_id, weight, sets, reps):
         if isinstance(weight, (list, tuple)):
             weight = ",".join(str(w) for w in weight)
@@ -865,11 +921,11 @@ class DatabaseManager:
     def log_nutrition(self, kcal, cost=None, log_date=None):
         log_date = log_date or date.today().isoformat()
         cur = self.conn.execute(
-            "INSERT INTO nutrition_logs (log_date, kcal, cost, created_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO nutrition_logs (log_date, kcal, cost, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
             (log_date, kcal, cost, datetime.now().isoformat()),
         )
         self.conn.commit()
-        return cur.lastrowid
+        return cur.fetchone()[0]
 
     def get_nutrition_history(self, limit=90):
         rows = self.conn.execute(
@@ -891,8 +947,17 @@ class DatabaseManager:
     def update_user_settings(self, settings_dict):
         for key, value in settings_dict.items():
             self.conn.execute(
-                "INSERT INTO user_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?",
-                (key, str(value), str(value)),
+                """
+                MERGE INTO user_settings AS target
+                USING (SELECT ? AS [key], ? AS value) AS source
+                ON target.[key] = source.[key]
+                WHEN MATCHED THEN
+                    UPDATE SET value = source.value
+                WHEN NOT MATCHED THEN
+                    INSERT ([key], value)
+                    VALUES (source.[key], source.value);
+                """,
+                (key, str(value)),
             )
         self.conn.commit()
         return self.get_user_settings()
@@ -902,11 +967,11 @@ class DatabaseManager:
     # ------------------------------------------------------------------
     def add_grocery_list(self, week_label, items_json):
         cur = self.conn.execute(
-            "INSERT INTO grocery_lists (week_label, items_json, status, created_at) VALUES (?, ?, 'active', ?)",
+            "INSERT INTO grocery_lists (week_label, items_json, status, created_at) OUTPUT INSERTED.id VALUES (?, ?, 'active', ?)",
             (week_label, items_json, datetime.now().isoformat()),
         )
         self.conn.commit()
-        return cur.lastrowid
+        return cur.fetchone()[0]
 
     def get_active_grocery_list(self):
         row = self.conn.execute(
