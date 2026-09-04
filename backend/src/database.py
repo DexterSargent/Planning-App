@@ -150,7 +150,7 @@ CREATE TABLE recipe_ingredients (
                         ingredient_id INTEGER NOT NULL,
                         quantity_g FLOAT NOT NULL,
                         FOREIGN KEY(recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
-                        FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE RESTRICT
+                        FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE NO ACTION
                     )""")
 
         # ---------- Composed: workouts ----------
@@ -172,7 +172,7 @@ CREATE TABLE workout_exercises (
                         reps INTEGER,
                         weight NVARCHAR(MAX),
                         FOREIGN KEY(workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
-                        FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE RESTRICT
+                        FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE NO ACTION
                     )""")
 
         # ---------- Calendar ----------
