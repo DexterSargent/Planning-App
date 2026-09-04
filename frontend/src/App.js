@@ -213,7 +213,7 @@ function App() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (!localStorage.getItem('test_data_seeded')) {
+    if (isAuthenticated && !localStorage.getItem('test_data_seeded')) {
       fetchJson('/testdata')
         .then(() => {
           localStorage.setItem('test_data_seeded', 'true');
@@ -221,7 +221,7 @@ function App() {
         })
         .catch((err) => console.error('Failed to seed test data:', err));
     }
-  }, []);
+  }, [isAuthenticated]);
 
   // Fetch initial core data
   useEffect(() => {

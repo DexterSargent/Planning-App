@@ -22,8 +22,11 @@ export async function fetchJson(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
   
   if (response.status === 401 && path !== '/auth/login') {
+    const hadToken = !!getAuthToken();
     setAuthToken(null);
-    window.location.reload();
+    if (hadToken) {
+      window.location.reload();
+    }
   }
   
   if (!response.ok) {
