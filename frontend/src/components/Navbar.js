@@ -6,7 +6,7 @@ export function SideNav({ activeTab, setActiveTab }) {
     { id: 'mealplan', label: 'Meal Planner' },
     { id: 'training', label: 'Training' },
     { id: 'schedule', label: 'Schedule' },
-    { id: 'analytics', label: 'Analytics' },
+    // { id: 'analytics', label: 'Analytics' },
   ];
 
   return (
@@ -25,7 +25,7 @@ export function SideNav({ activeTab, setActiveTab }) {
   );
 }
 
-export function TopBar({ activeTab, theme, setTheme }) {
+export function TopBar({ activeTab, theme, setTheme, onOpenSettings }) {
   const getTitle = () => {
     switch (activeTab) {
       case 'dashboard': return 'Dashboard';
@@ -45,13 +45,29 @@ export function TopBar({ activeTab, theme, setTheme }) {
       </div>
       <div className="top-actions">
         <button
+          className="secondary-button"
+          onClick={onOpenSettings}
+        >
+          Settings
+        </button>
+        <button
           className="secondary-button theme-toggle"
           onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
         >
           {theme === 'light' ? 'Dark mode' : 'Light mode'}
+        </button>
+        <button
+          className="secondary-button"
+          onClick={() => {
+            localStorage.removeItem('app_token');
+            window.location.reload();
+          }}
+        >
+          Logout
         </button>
         <div className="status-pill">Live</div>
       </div>
     </header>
   );
 }
+

@@ -7,6 +7,7 @@ export default function Dashboard({
   todayWorkouts,
   workouts,
   workoutExercises,
+  exercises,
   eventColors,
   dashboardPerformance,
   performanceFieldKey,
@@ -43,7 +44,7 @@ export default function Dashboard({
                 <div key={event.id} className="card compact-card">
                   <div className="card-heading">
                     <div>
-                      <strong>{event.title || workout?.name || 'Training'}</strong>
+                      <strong>{event.is_completed ? '✓ ' : ''}{event.title || workout?.name || 'Training'}</strong>
                       <span>{event.start_time || 'Anytime'}</span>
                     </div>
                     <span className="pill" style={{ background: eventColors[event.event_type] }}>
@@ -53,26 +54,40 @@ export default function Dashboard({
                   {workout ? (
                     <div className="workout-form">
                       {details.length ? (
-                        details.map((exercise) => (
-                          <div key={exercise.exercise_id} className="workout-row">
-                            <div>
-                              <strong>{exercise.name}</strong>
-                              <small>
-                                {exercise.sets}×{exercise.reps} · {exercise.weight || 'percent'}
-                              </small>
+                        details.map((exercise) => {
+                          const exData = exercises?.find((item) => item.id === exercise.exercise_id);
+                          let placeholderText = "Weights (e.g. 225,225,235)";
+                          if (exercise.weight && exercise.weight.includes('%') && exData && exData.one_rm) {
+                            const percent = parseFloat(exercise.weight);
+                            if (!isNaN(percent)) {
+                              const computed = Math.round((percent / 100) * exData.one_rm);
+                              placeholderText = `Target: ${computed} lbs (${percent}% of ${exData.one_rm} 1RM)`;
+                            }
+                          } else if (exercise.weight) {
+                            placeholderText = `Target: ${exercise.weight}`;
+                          }
+
+                          return (
+                            <div key={exercise.exercise_id} className="workout-row">
+                              <div>
+                                <strong>{exercise.name}</strong>
+                                <small>
+                                  {exercise.sets}×{exercise.reps} · {exercise.weight || 'percent'}
+                                </small>
+                              </div>
+                              <input
+                                placeholder={placeholderText}
+                                value={
+                                  dashboardPerformance[performanceFieldKey(event.id, exercise.exercise_id)] ||
+                                  ''
+                                }
+                                onChange={(e) =>
+                                  handlePerformanceChange(event.id, exercise.exercise_id, e.target.value)
+                                }
+                              />
                             </div>
-                            <input
-                              placeholder="Weights (e.g. 225,225,235)"
-                              value={
-                                dashboardPerformance[performanceFieldKey(event.id, exercise.exercise_id)] ||
-                                ''
-                              }
-                              onChange={(e) =>
-                                handlePerformanceChange(event.id, exercise.exercise_id, e.target.value)
-                              }
-                            />
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="empty-state">Loading workout details...</div>
                       )}

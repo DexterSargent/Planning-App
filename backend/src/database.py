@@ -79,6 +79,7 @@ class DatabaseManager:
                         kcal_per_100g REAL NOT NULL,
                         cost_per_100g REAL NOT NULL,
                         category TEXT,
+                        in_inventory INTEGER DEFAULT 0,
                         created_at TIMESTAMP
                     )""")
 
@@ -100,6 +101,7 @@ class DatabaseManager:
                         servings INTEGER DEFAULT 1,
                         instructions TEXT,
                         tags TEXT,
+                        meal_type TEXT DEFAULT 'supper',
                         created_at TIMESTAMP
                     )""")
 
@@ -117,6 +119,7 @@ class DatabaseManager:
                         id INTEGER PRIMARY KEY,
                         name TEXT NOT NULL,
                         duration_mins INTEGER DEFAULT 0,
+                        location_type TEXT DEFAULT 'gym',
                         created_at TIMESTAMP
                     )""")
 
@@ -142,20 +145,18 @@ class DatabaseManager:
                         ref_workout_id INTEGER,
                         ref_recipe_id INTEGER,
                         notes TEXT,
+                        location_type TEXT,
+                        is_completed BOOLEAN DEFAULT 0,
                         created_at TIMESTAMP,
                         FOREIGN KEY(ref_workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
                         FOREIGN KEY(ref_recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
                     )""")
+        try:
+            c.execute("ALTER TABLE calendar_events ADD COLUMN is_completed BOOLEAN DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
 
         # ---------- Analytics logs ----------
-        c.execute("""CREATE TABLE IF NOT EXISTS body_logs (
-                        id INTEGER PRIMARY KEY,
-                        log_date TEXT NOT NULL,
-                        weight_lbs REAL NOT NULL,
-                        bodyfat_pct REAL,
-                        created_at TIMESTAMP
-                    )""")
-
         c.execute("""CREATE TABLE IF NOT EXISTS lift_logs (
                         id INTEGER PRIMARY KEY,
                         exercise_id INTEGER NOT NULL,
@@ -175,6 +176,37 @@ class DatabaseManager:
                         created_at TIMESTAMP
                     )""")
 
+        c.execute("""CREATE TABLE IF NOT EXISTS user_settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT
+                    )""")
+
+        c.execute("""CREATE TABLE IF NOT EXISTS grocery_lists (
+                        id INTEGER PRIMARY KEY,
+                        week_label TEXT NOT NULL,
+                        items_json TEXT NOT NULL,
+                        status TEXT DEFAULT 'active',
+                        created_at TIMESTAMP
+                    )""")
+
+        c.execute("""CREATE TABLE IF NOT EXISTS weekly_schedule_template (
+                        id INTEGER PRIMARY KEY,
+                        day_of_week TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        event_type TEXT NOT NULL,
+                        start_time TEXT,
+                        duration_mins INTEGER DEFAULT 60,
+                        meal_slot_type TEXT,
+                        notes TEXT,
+                        ref_workout_id INTEGER,
+                        location TEXT,
+                        location_type TEXT,
+                        commute_to_mins INTEGER,
+                        commute_from_mins INTEGER,
+                        created_at TIMESTAMP,
+                        FOREIGN KEY(ref_workout_id) REFERENCES workouts(id) ON DELETE CASCADE
+                    )""")
+
         c.execute("CREATE INDEX IF NOT EXISTS idx_calendar_event_date ON calendar_events(event_date);")
         c.execute("CREATE INDEX IF NOT EXISTS idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date);")
         c.execute("CREATE INDEX IF NOT EXISTS idx_body_logs_date ON body_logs(log_date);")
@@ -192,32 +224,73 @@ class DatabaseManager:
             c.execute("ALTER TABLE recipes ADD COLUMN instructions TEXT")
         if "tags" not in existing_recipe_cols:
             c.execute("ALTER TABLE recipes ADD COLUMN tags TEXT")
+        if "meal_type" not in existing_recipe_cols:
+            c.execute("ALTER TABLE recipes ADD COLUMN meal_type TEXT DEFAULT 'supper'")
 
         existing_ing_cols = {r["name"] for r in c.execute("PRAGMA table_info(ingredients)")}
         if "category" not in existing_ing_cols:
             c.execute("ALTER TABLE ingredients ADD COLUMN category TEXT")
+        if "in_inventory" not in existing_ing_cols:
+            c.execute("ALTER TABLE ingredients ADD COLUMN in_inventory INTEGER DEFAULT 0")
 
         existing_ex_cols = {r["name"] for r in c.execute("PRAGMA table_info(exercises)")}
         if "one_rm" not in existing_ex_cols:
             c.execute("ALTER TABLE exercises ADD COLUMN one_rm REAL")
+
+        existing_wo_cols = {r["name"] for r in c.execute("PRAGMA table_info(workouts)")}
+        if "location_type" not in existing_wo_cols:
+            c.execute("ALTER TABLE workouts ADD COLUMN location_type TEXT DEFAULT 'gym'")
+
+        existing_cal_cols = {r["name"] for r in c.execute("PRAGMA table_info(calendar_events)")}
+        if "location_type" not in existing_cal_cols:
+            c.execute("ALTER TABLE calendar_events ADD COLUMN location_type TEXT")
+
+        existing_template_cols = {r["name"] for r in c.execute("PRAGMA table_info(weekly_schedule_template)")}
+        if "ref_workout_id" not in existing_template_cols:
+            c.execute("ALTER TABLE weekly_schedule_template ADD COLUMN ref_workout_id INTEGER")
+        if "location" not in existing_template_cols:
+            c.execute("ALTER TABLE weekly_schedule_template ADD COLUMN location TEXT")
+        if "location_type" not in existing_template_cols:
+            c.execute("ALTER TABLE weekly_schedule_template ADD COLUMN location_type TEXT")
+        if "commute_to_mins" not in existing_template_cols:
+            c.execute("ALTER TABLE weekly_schedule_template ADD COLUMN commute_to_mins INTEGER")
+        if "commute_from_mins" not in existing_template_cols:
+            c.execute("ALTER TABLE weekly_schedule_template ADD COLUMN commute_from_mins INTEGER")
 
         c.execute("CREATE INDEX IF NOT EXISTS idx_calendar_event_date ON calendar_events(event_date);")
         c.execute("CREATE INDEX IF NOT EXISTS idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date);")
         c.execute("CREATE INDEX IF NOT EXISTS idx_body_logs_date ON body_logs(log_date);")
         c.execute("CREATE INDEX IF NOT EXISTS idx_nutrition_logs_date ON nutrition_logs(log_date);")
 
+        c.execute("""CREATE TABLE IF NOT EXISTS user_settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT
+                    )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS grocery_lists (
+                        id INTEGER PRIMARY KEY,
+                        week_label TEXT NOT NULL,
+                        items_json TEXT NOT NULL,
+                        status TEXT DEFAULT 'active',
+                        created_at TIMESTAMP
+                    )""")
+
         self.conn.commit()
 
     def _seed_initial_data(self):
-        # Seed a large Toronto-grocery-style ingredient set if none exist
-        if not self.get_all_ingredients():
-            for g in TORONTO_GROCERY_INGREDIENTS:
-                self.add_ingredient(*g)
+        # Always sync/upsert our rich Toronto grocery set so existing databases get updated categories and accurate CAD pricing
+        for name, kcal, cost, cat in TORONTO_GROCERY_INGREDIENTS:
+            self.conn.execute(
+                "INSERT INTO ingredients (name, kcal_per_100g, cost_per_100g, category, in_inventory, created_at) VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT(name) DO UPDATE SET kcal_per_100g = excluded.kcal_per_100g, cost_per_100g = excluded.cost_per_100g, category = excluded.category",
+                (name, kcal, cost, cat, datetime.now().isoformat()),
+            )
 
-        # Seed a large, categorized exercise library if none exist
-        if not self.get_all_exercises():
-            for e, cat in EXERCISE_LIBRARY:
-                self.add_exercise(e, cat)
+        # Always sync/upsert our comprehensive exercise library so existing databases get multi-muscle categories
+        for e, cat in EXERCISE_LIBRARY:
+            self.conn.execute(
+                "INSERT INTO exercises (name, category, created_at) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET category = excluded.category",
+                (e, cat, datetime.now().isoformat()),
+            )
+        self.conn.commit()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -274,10 +347,10 @@ class DatabaseManager:
     # ------------------------------------------------------------------
     # Ingredients (master library)
     # ------------------------------------------------------------------
-    def add_ingredient(self, name, kcal_per_100g, cost_per_100g, category=None):
+    def add_ingredient(self, name, kcal_per_100g, cost_per_100g, category=None, in_inventory=0):
         cur = self.conn.execute(
-            "INSERT INTO ingredients (name, kcal_per_100g, cost_per_100g, category, created_at) VALUES (?, ?, ?, ?, ?)",
-            (name, kcal_per_100g, cost_per_100g, category, datetime.now().isoformat()),
+            "INSERT INTO ingredients (name, kcal_per_100g, cost_per_100g, category, in_inventory, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (name, kcal_per_100g, cost_per_100g, category, int(in_inventory), datetime.now().isoformat()),
         )
         self.conn.commit()
         return cur.lastrowid
@@ -297,10 +370,17 @@ class DatabaseManager:
         ).fetchone()
         return dict(row) if row else None
 
-    def update_ingredient(self, ingredient_id, name, kcal_per_100g, cost_per_100g, category=None):
+    def update_ingredient(self, ingredient_id, name, kcal_per_100g, cost_per_100g, category=None, in_inventory=0):
         self.conn.execute(
-            "UPDATE ingredients SET name = ?, kcal_per_100g = ?, cost_per_100g = ?, category = ? WHERE id = ?",
-            (name, kcal_per_100g, cost_per_100g, category, ingredient_id),
+            "UPDATE ingredients SET name = ?, kcal_per_100g = ?, cost_per_100g = ?, category = ?, in_inventory = ? WHERE id = ?",
+            (name, kcal_per_100g, cost_per_100g, category, int(in_inventory), ingredient_id),
+        )
+        self.conn.commit()
+
+    def toggle_ingredient_inventory(self, ingredient_id, in_inventory):
+        self.conn.execute(
+            "UPDATE ingredients SET in_inventory = ? WHERE id = ?",
+            (int(in_inventory), ingredient_id),
         )
         self.conn.commit()
 
@@ -382,13 +462,13 @@ class DatabaseManager:
         return round(total_kcal), round(total_cost, 2)
 
     def add_recipe(self, name, ingredient_list, time_to_cook_mins=0, servings=1,
-                    instructions=None, tags=None):
+                    instructions=None, tags=None, meal_type='supper'):
         total_kcal, total_cost = self._compute_recipe_totals(ingredient_list)
         cur = self.conn.execute(
             """INSERT INTO recipes (name, total_kcal, cost, time_to_cook_mins, servings,
-               instructions, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               instructions, tags, meal_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (name, total_kcal, total_cost, time_to_cook_mins, servings or 1,
-             instructions, tags, datetime.now().isoformat()),
+             instructions, tags, meal_type or 'supper', datetime.now().isoformat()),
         )
         recipe_id = cur.lastrowid
         for item in ingredient_list:
@@ -422,13 +502,13 @@ class DatabaseManager:
         return self._rows_to_dicts(rows)
 
     def update_recipe(self, recipe_id, name, ingredient_list, time_to_cook_mins=0,
-                       servings=1, instructions=None, tags=None):
+                       servings=1, instructions=None, tags=None, meal_type='supper'):
         total_kcal, total_cost = self._compute_recipe_totals(ingredient_list)
         self.conn.execute(
             """UPDATE recipes SET name = ?, total_kcal = ?, cost = ?, time_to_cook_mins = ?,
-               servings = ?, instructions = ?, tags = ? WHERE id = ?""",
+               servings = ?, instructions = ?, tags = ?, meal_type = ? WHERE id = ?""",
             (name, total_kcal, total_cost, time_to_cook_mins, servings or 1,
-             instructions, tags, recipe_id),
+             instructions, tags, meal_type or 'supper', recipe_id),
         )
         self.conn.execute("DELETE FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
         for item in ingredient_list:
@@ -443,6 +523,104 @@ class DatabaseManager:
         self.conn.execute("DELETE FROM calendar_events WHERE ref_recipe_id = ?", (recipe_id,))
         self.conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
         self.conn.commit()
+
+    # ------------------------------------------------------------------
+    # Weekly Schedule Template
+    # ------------------------------------------------------------------
+    def get_weekly_schedule_template(self):
+        rows = self.conn.execute("SELECT * FROM weekly_schedule_template ORDER BY id ASC").fetchall()
+        return self._rows_to_dicts(rows)
+
+    def add_weekly_template_block(self, day_of_week, title, event_type, start_time="08:00", duration_mins=60, meal_slot_type=None, notes=None, ref_workout_id=None, location=None, location_type=None, commute_to_mins=None, commute_from_mins=None):
+        cur = self.conn.execute(
+            """INSERT INTO weekly_schedule_template 
+               (day_of_week, title, event_type, start_time, duration_mins, meal_slot_type, notes, ref_workout_id, location, location_type, commute_to_mins, commute_from_mins, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (day_of_week, title, event_type, start_time, duration_mins, meal_slot_type, notes, ref_workout_id, location, location_type, commute_to_mins, commute_from_mins, datetime.now().isoformat())
+        )
+        self.conn.commit()
+        return cur.lastrowid
+
+    def delete_weekly_template_block(self, block_id):
+        self.conn.execute("DELETE FROM weekly_schedule_template WHERE id = ?", (block_id,))
+        self.conn.commit()
+
+    def apply_template_to_week(self, week_start_date_str):
+        try:
+            mon = datetime.strptime(week_start_date_str, "%Y-%m-%d")
+        except Exception:
+            return 0
+        day_map = {
+            "Monday": 0,
+            "Tuesday": 1,
+            "Wednesday": 2,
+            "Thursday": 3,
+            "Friday": 4,
+            "Saturday": 5,
+            "Sunday": 6
+        }
+        blocks = self.get_weekly_schedule_template()
+        count = 0
+        for block in blocks:
+            offset = day_map.get(block["day_of_week"], 0)
+            target_date = (mon + timedelta(days=offset)).strftime("%Y-%m-%d")
+            
+            # 1. Main event
+            self.add_calendar_event(
+                title=block["title"],
+                event_type=block["event_type"],
+                event_date=target_date,
+                start_time=block["start_time"] or "08:00",
+                duration_mins=block["duration_mins"] or 60,
+                notes=block["notes"],
+                ref_workout_id=block["ref_workout_id"],
+                location_type=block["location_type"]
+            )
+            count += 1
+
+            loc_label = (block.get("location") or block.get("location_type") or "LOCATION").upper()
+            start_time_str = block["start_time"] or "08:00"
+
+            # 2. Commute To
+            commute_to = block.get("commute_to_mins")
+            if commute_to:
+                try:
+                    c_to = int(commute_to)
+                    if c_to > 0:
+                        start_dt = datetime.strptime(start_time_str, "%H:%M")
+                        commute_start_dt = start_dt - timedelta(minutes=c_to)
+                        self.add_calendar_event(
+                            title=f"🚕 Commute to {loc_label} (~{c_to}m)",
+                            event_type="Commute",
+                            event_date=target_date,
+                            start_time=commute_start_dt.strftime("%H:%M"),
+                            duration_mins=c_to
+                        )
+                        count += 1
+                except (ValueError, TypeError):
+                    pass
+
+            # 3. Commute From
+            commute_from = block.get("commute_from_mins")
+            if commute_from:
+                try:
+                    c_from = int(commute_from)
+                    if c_from > 0:
+                        start_dt = datetime.strptime(start_time_str, "%H:%M")
+                        duration = int(block["duration_mins"] or 60)
+                        commute_start_dt = start_dt + timedelta(minutes=duration)
+                        self.add_calendar_event(
+                            title=f"🚕 Return from {loc_label} (~{c_from}m)",
+                            event_type="Commute",
+                            event_date=target_date,
+                            start_time=commute_start_dt.strftime("%H:%M"),
+                            duration_mins=c_from
+                        )
+                        count += 1
+                except (ValueError, TypeError):
+                    pass
+
+        return count
 
     def get_grocery_list(self, start_date, end_date):
         """Aggregate ingredients needed for every Meal/Nutrition event with a
@@ -467,6 +645,7 @@ class DatabaseManager:
                         "category": ing["category"] or "Other",
                         "grams": 0.0,
                         "recipes": set(),
+                        "in_inventory": ing.get("in_inventory", 0),
                     }
                 totals[key]["grams"] += ing["quantity_g"]
                 totals[key]["recipes"].add(row["recipe_name"])
@@ -482,13 +661,13 @@ class DatabaseManager:
     # ------------------------------------------------------------------
     # Workouts
     # ------------------------------------------------------------------
-    def add_workout(self, name, exercise_list, duration_mins=None):
+    def add_workout(self, name, exercise_list, duration_mins=None, location_type='gym'):
         if duration_mins is None:
             duration_mins = sum((e.get("sets") or 0) for e in exercise_list) * 3
 
         cur = self.conn.execute(
-            "INSERT INTO workouts (name, duration_mins, created_at) VALUES (?, ?, ?)",
-            (name, duration_mins, datetime.now().isoformat()),
+            "INSERT INTO workouts (name, duration_mins, location_type, created_at) VALUES (?, ?, ?, ?)",
+            (name, duration_mins, location_type, datetime.now().isoformat()),
         )
         workout_id = cur.lastrowid
         for e in exercise_list:
@@ -514,20 +693,20 @@ class DatabaseManager:
 
     def get_workout_exercises(self, workout_id):
         rows = self.conn.execute(
-            """SELECT we.sets, we.reps, we.weight, e.name, e.id as exercise_id FROM workout_exercises we
+            """SELECT we.sets, we.reps, we.weight, e.name, e.category, e.id as exercise_id FROM workout_exercises we
                JOIN exercises e ON e.id = we.exercise_id
                WHERE we.workout_id = ?""",
             (workout_id,),
         ).fetchall()
         return self._rows_to_dicts(rows)
 
-    def update_workout(self, workout_id, name, exercise_list, duration_mins=None):
+    def update_workout(self, workout_id, name, exercise_list, duration_mins=None, location_type='gym'):
         if duration_mins is None:
             duration_mins = sum((e.get("sets") or 0) for e in exercise_list) * 3
 
         self.conn.execute(
-            "UPDATE workouts SET name = ?, duration_mins = ? WHERE id = ?",
-            (name, duration_mins, workout_id),
+            "UPDATE workouts SET name = ?, duration_mins = ?, location_type = ? WHERE id = ?",
+            (name, duration_mins, location_type, workout_id),
         )
         self.conn.execute("DELETE FROM workout_exercises WHERE workout_id = ?", (workout_id,))
         for e in exercise_list:
@@ -547,13 +726,13 @@ class DatabaseManager:
     # Calendar events
     # ------------------------------------------------------------------
     def add_calendar_event(self, title, event_type, event_date, start_time=None,
-                            duration_mins=None, ref_workout_id=None, ref_recipe_id=None, notes=None):
+                            duration_mins=None, ref_workout_id=None, ref_recipe_id=None, notes=None, location_type=None, is_completed=False):
         cur = self.conn.execute(
             """INSERT INTO calendar_events
-               (title, event_type, event_date, start_time, duration_mins, ref_workout_id, ref_recipe_id, notes, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (title, event_type, event_date, start_time, duration_mins, ref_workout_id, ref_recipe_id, notes, location_type, is_completed, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (title, event_type, event_date, start_time, duration_mins,
-             ref_workout_id, ref_recipe_id, notes, datetime.now().isoformat()),
+             ref_workout_id, ref_recipe_id, notes, location_type, is_completed, datetime.now().isoformat()),
         )
         self.conn.commit()
         return cur.lastrowid
@@ -587,12 +766,12 @@ class DatabaseManager:
         return dict(row) if row else None
 
     def update_calendar_event(self, event_id, title, event_type, event_date, start_time=None,
-                               duration_mins=None, ref_workout_id=None, ref_recipe_id=None, notes=None):
+                               duration_mins=None, ref_workout_id=None, ref_recipe_id=None, notes=None, location_type=None, is_completed=False):
         self.conn.execute(
             """UPDATE calendar_events SET title = ?, event_type = ?, event_date = ?, start_time = ?,
-               duration_mins = ?, ref_workout_id = ?, ref_recipe_id = ?, notes = ? WHERE id = ?""",
+               duration_mins = ?, ref_workout_id = ?, ref_recipe_id = ?, notes = ?, location_type = ?, is_completed = ? WHERE id = ?""",
             (title, event_type, event_date, start_time, duration_mins,
-             ref_workout_id, ref_recipe_id, notes, event_id),
+             ref_workout_id, ref_recipe_id, notes, location_type, is_completed, event_id),
         )
         self.conn.commit()
 
@@ -603,24 +782,6 @@ class DatabaseManager:
     # ------------------------------------------------------------------
     # Analytics logs
     # ------------------------------------------------------------------
-    def log_bodyweight(self, weight_lbs, log_date=None, bodyfat_pct=None):
-        log_date = log_date or date.today().isoformat()
-        cur = self.conn.execute(
-            "INSERT INTO body_logs (log_date, weight_lbs, bodyfat_pct, created_at) VALUES (?, ?, ?, ?)",
-            (log_date, weight_lbs, bodyfat_pct, datetime.now().isoformat()),
-        )
-        self.conn.commit()
-        return cur.lastrowid
-
-    def get_bodyweight_history(self, limit=90):
-        rows = self.conn.execute(
-            "SELECT * FROM body_logs ORDER BY log_date DESC LIMIT ?", (limit,)
-        ).fetchall()
-        return list(reversed(self._rows_to_dicts(rows)))
-
-    def delete_bodyweight_log(self, log_id):
-        self.conn.execute("DELETE FROM body_logs WHERE id = ?", (log_id,))
-        self.conn.commit()
 
     def log_lift(self, exercise_id, weight, sets=None, reps=None, log_date=None):
         """`weight` may be a single number, a comma-separated string of
@@ -644,12 +805,41 @@ class DatabaseManager:
             except ValueError:
                 pass
         return cur.lastrowid
+    def update_lift_log(self, log_id, weight, sets, reps):
+        if isinstance(weight, (list, tuple)):
+            weight = ",".join(str(w) for w in weight)
+        self.conn.execute(
+            "UPDATE lift_logs SET weight = ?, sets = ?, reps = ? WHERE id = ?",
+            (str(weight), sets, reps, log_id)
+        )
+        self.conn.commit()
 
-    def get_lift_history(self, exercise_id, limit=90):
-        rows = self.conn.execute(
-            "SELECT * FROM lift_logs WHERE exercise_id = ? ORDER BY log_date DESC LIMIT ?",
-            (exercise_id, limit),
-        ).fetchall()
+        # Re-calc 1RM if applicable (fetch the exercise_id from log first)
+        row = self.conn.execute("SELECT exercise_id FROM lift_logs WHERE id = ?", (log_id,)).fetchone()
+        if row and reps is not None and reps > 0:
+            try:
+                weights = [float(x.strip()) for x in str(weight).replace('/', ',').split(',') if x.strip()]
+                max_weight = max(weights) if weights else None
+                if max_weight is not None:
+                    new_one_rm = max_weight * (1 + reps / 30.0)
+                    self.refresh_exercise_1rm(row["exercise_id"], new_one_rm)
+            except ValueError:
+                pass
+
+    def get_lift_history(self, exercise_id=None, limit=200, log_date=None):
+        query = "SELECT * FROM lift_logs WHERE 1=1"
+        params = []
+        if exercise_id is not None:
+            query += " AND exercise_id = ?"
+            params.append(exercise_id)
+        if log_date is not None:
+            query += " AND log_date = ?"
+            params.append(log_date)
+        
+        query += " ORDER BY log_date DESC LIMIT ?"
+        params.append(limit)
+        
+        rows = self.conn.execute(query, tuple(params)).fetchall()
         return list(reversed(self._rows_to_dicts(rows)))
 
     def get_current_1rm_estimate(self, exercise_id):
@@ -691,6 +881,56 @@ class DatabaseManager:
         self.conn.execute("DELETE FROM nutrition_logs WHERE id = ?", (log_id,))
         self.conn.commit()
 
+    # ------------------------------------------------------------------
+    # Settings
+    # ------------------------------------------------------------------
+    def get_user_settings(self):
+        rows = self.conn.execute("SELECT key, value FROM user_settings").fetchall()
+        return {r["key"]: r["value"] for r in rows}
+
+    def update_user_settings(self, settings_dict):
+        for key, value in settings_dict.items():
+            self.conn.execute(
+                "INSERT INTO user_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?",
+                (key, str(value), str(value)),
+            )
+        self.conn.commit()
+        return self.get_user_settings()
+
+    # ------------------------------------------------------------------
+    # Grocery Lists
+    # ------------------------------------------------------------------
+    def add_grocery_list(self, week_label, items_json):
+        cur = self.conn.execute(
+            "INSERT INTO grocery_lists (week_label, items_json, status, created_at) VALUES (?, ?, 'active', ?)",
+            (week_label, items_json, datetime.now().isoformat()),
+        )
+        self.conn.commit()
+        return cur.lastrowid
+
+    def get_active_grocery_list(self):
+        row = self.conn.execute(
+            "SELECT * FROM grocery_lists WHERE status = 'active' ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_all_grocery_lists(self):
+        rows = self.conn.execute(
+            "SELECT * FROM grocery_lists ORDER BY created_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_grocery_list(self, list_id, items_json=None, status=None):
+        if items_json is not None:
+            self.conn.execute("UPDATE grocery_lists SET items_json = ? WHERE id = ?", (items_json, list_id))
+        if status is not None:
+            self.conn.execute("UPDATE grocery_lists SET status = ? WHERE id = ?", (status, list_id))
+        self.conn.commit()
+
+    def delete_grocery_list(self, list_id):
+        self.conn.execute("DELETE FROM grocery_lists WHERE id = ?", (list_id,))
+        self.conn.commit()
+
     def close(self):
         self.conn.close()
 
@@ -703,189 +943,284 @@ class DatabaseManager:
 # typical Toronto grocery store: No Frills / Metro / Farm Boy staples),
 # category (used to group the grocery list by aisle)
 TORONTO_GROCERY_INGREDIENTS = [
-    # Proteins
+    # Meat & Poultry (CAD / 100g based on Toronto staples: No Frills, Metro, Loblaws)
     ("Chicken Breast (Boneless Skinless)", 165, 1.80, "Meat & Poultry"),
     ("Chicken Thigh (Boneless Skinless)", 209, 1.55, "Meat & Poultry"),
-    ("Extra Lean Ground Beef", 212, 1.95, "Meat & Poultry"),
-    ("Regular Ground Beef", 254, 1.60, "Meat & Poultry"),
-    ("Ground Turkey", 189, 1.85, "Meat & Poultry"),
+    ("Chicken Drumsticks", 161, 0.90, "Meat & Poultry"),
+    ("Extra Lean Ground Beef (90/10)", 212, 1.95, "Meat & Poultry"),
+    ("Lean Ground Beef (80/20)", 254, 1.60, "Meat & Poultry"),
+    ("Beef Top Sirloin Steak", 250, 3.50, "Meat & Poultry"),
+    ("Beef Ribeye Steak", 291, 4.80, "Meat & Poultry"),
+    ("Ground Turkey (Lean)", 189, 1.85, "Meat & Poultry"),
     ("Pork Tenderloin", 143, 1.70, "Meat & Poultry"),
-    ("Bacon", 541, 3.10, "Meat & Poultry"),
-    ("Salmon Filet", 208, 3.20, "Fish & Seafood"),
+    ("Pork Loin Chops", 196, 1.45, "Meat & Poultry"),
+    ("Bacon (Stripped)", 541, 3.10, "Meat & Poultry"),
+    ("Turkey Bacon", 368, 2.80, "Meat & Poultry"),
+
+    # Fish & Seafood
+    ("Atlantic Salmon Filet", 208, 3.20, "Fish & Seafood"),
+    ("Wild Sockeye Salmon", 168, 4.50, "Fish & Seafood"),
     ("Tilapia Filet", 129, 2.60, "Fish & Seafood"),
+    ("Cod Filet", 82, 2.90, "Fish & Seafood"),
+    ("Halibut Filet", 111, 5.20, "Fish & Seafood"),
     ("Canned Tuna (in water)", 116, 1.90, "Fish & Seafood"),
-    ("Shrimp (raw, peeled)", 99, 3.80, "Fish & Seafood"),
-    ("Eggs (Whole)", 143, 0.55, "Dairy & Eggs"),
-    ("Egg Whites (liquid)", 52, 0.90, "Dairy & Eggs"),
-    ("Firm Tofu", 144, 0.90, "Meat Alternatives"),
-    ("Tempeh", 190, 1.60, "Meat Alternatives"),
-    ("Black Beans (Canned)", 132, 0.35, "Pantry"),
-    ("Chickpeas (Canned)", 164, 0.35, "Pantry"),
-    ("Lentils (Dry)", 353, 0.55, "Pantry"),
-    ("Whey Protein Powder", 379, 3.50, "Supplements"),
-    ("Plant Protein Powder", 370, 4.20, "Supplements"),
+    ("Canned Salmon", 136, 2.10, "Fish & Seafood"),
+    ("Shrimp (Raw, Peeled, Large)", 99, 3.80, "Fish & Seafood"),
+    ("Sea Scallops", 111, 4.90, "Fish & Seafood"),
 
-    # Dairy
-    ("Whole Milk", 61, 0.25, "Dairy & Eggs"),
+    # Dairy & Eggs
+    ("Eggs (Large Whole)", 143, 0.55, "Dairy & Eggs"),
+    ("Egg Whites (Liquid Cartons)", 52, 0.90, "Dairy & Eggs"),
+    ("Whole Milk (3.25%)", 61, 0.25, "Dairy & Eggs"),
+    ("2% Reduced Fat Milk", 50, 0.24, "Dairy & Eggs"),
     ("Skim Milk", 34, 0.22, "Dairy & Eggs"),
-    ("Greek Yogurt (Plain)", 59, 0.70, "Dairy & Eggs"),
-    ("Cottage Cheese (Low Fat)", 98, 0.85, "Dairy & Eggs"),
-    ("Cheddar Cheese", 403, 2.30, "Dairy & Eggs"),
-    ("Mozzarella Cheese (Shredded)", 280, 2.00, "Dairy & Eggs"),
-    ("Butter", 717, 1.60, "Dairy & Eggs"),
+    ("Greek Yogurt (Plain 0%)", 59, 0.70, "Dairy & Eggs"),
+    ("Greek Yogurt (Plain 2%)", 73, 0.75, "Dairy & Eggs"),
+    ("Cottage Cheese (2% Low Fat)", 98, 0.85, "Dairy & Eggs"),
+    ("Cheddar Cheese (Old/Medium)", 403, 2.30, "Dairy & Eggs"),
+    ("Mozzarella Cheese (Part Skim)", 280, 2.00, "Dairy & Eggs"),
+    ("Parmesan Cheese (Grated)", 431, 3.60, "Dairy & Eggs"),
+    ("Feta Cheese", 264, 2.50, "Dairy & Eggs"),
+    ("Butter (Salted/Unsalted)", 717, 1.60, "Dairy & Eggs"),
     ("Cream Cheese", 342, 1.80, "Dairy & Eggs"),
+    ("Heavy Whipping Cream (35%)", 340, 0.95, "Dairy & Eggs"),
 
-    # Grains & starches
-    ("White Rice (Dry)", 360, 0.40, "Grains & Pasta"),
+    # Plant-Based / Meat Alternatives
+    ("Extra Firm Tofu", 144, 0.90, "Meat Alternatives"),
+    ("Tempeh (Organic)", 190, 1.60, "Meat Alternatives"),
+    ("Edamame (Shelled Frozen)", 121, 1.10, "Meat Alternatives"),
+    ("Seitan / Wheat Gluten", 370, 1.80, "Meat Alternatives"),
+
+    # Grains & Pasta
+    ("Jasmine White Rice (Dry)", 360, 0.40, "Grains & Pasta"),
     ("Brown Rice (Dry)", 370, 0.45, "Grains & Pasta"),
     ("Basmati Rice (Dry)", 349, 0.55, "Grains & Pasta"),
-    ("Oats", 389, 0.50, "Grains & Pasta"),
-    ("Quinoa (Dry)", 368, 1.30, "Grains & Pasta"),
+    ("Rolled Oats (Large Flake)", 389, 0.50, "Grains & Pasta"),
+    ("Steel Cut Oats (Dry)", 375, 0.60, "Grains & Pasta"),
+    ("Quinoa (Organic Dry)", 368, 1.30, "Grains & Pasta"),
     ("Whole Wheat Pasta (Dry)", 348, 0.65, "Grains & Pasta"),
-    ("White Pasta (Dry)", 371, 0.45, "Grains & Pasta"),
-    ("Whole Wheat Bread", 247, 0.55, "Bakery"),
-    ("White Bread", 265, 0.45, "Bakery"),
-    ("Bagel (Plain)", 257, 0.80, "Bakery"),
-    ("Tortilla Wraps (Whole Wheat)", 285, 0.70, "Bakery"),
+    ("White Penne/Spaghetti (Dry)", 371, 0.45, "Grains & Pasta"),
     ("Couscous (Dry)", 376, 0.75, "Grains & Pasta"),
+    ("Farro (Dry)", 335, 1.10, "Grains & Pasta"),
 
-    # Vegetables
-    ("Broccoli", 34, 0.60, "Produce"),
-    ("Sweet Potato", 86, 0.45, "Produce"),
-    ("Russet Potato", 77, 0.30, "Produce"),
-    ("Spinach", 23, 0.90, "Produce"),
-    ("Kale", 49, 1.00, "Produce"),
-    ("Onion", 40, 0.30, "Produce"),
-    ("Garlic", 149, 1.40, "Produce"),
-    ("Bell Pepper", 31, 1.10, "Produce"),
-    ("Carrot", 41, 0.35, "Produce"),
-    ("Cucumber", 15, 0.55, "Produce"),
-    ("Tomato", 18, 0.65, "Produce"),
-    ("Cherry Tomatoes", 18, 1.20, "Produce"),
-    ("Zucchini", 17, 0.65, "Produce"),
-    ("Mushroom (White)", 22, 1.00, "Produce"),
-    ("Green Beans", 31, 0.90, "Produce"),
-    ("Cauliflower", 25, 0.65, "Produce"),
-    ("Asparagus", 20, 1.80, "Produce"),
-    ("Romaine Lettuce", 17, 0.60, "Produce"),
-    ("Celery", 16, 0.45, "Produce"),
-    ("Corn (Frozen)", 86, 0.50, "Frozen"),
-    ("Mixed Frozen Vegetables", 65, 0.45, "Frozen"),
+    # Bakery
+    ("100% Whole Wheat Bread", 247, 0.55, "Bakery"),
+    ("Sourdough Loaf", 274, 0.90, "Bakery"),
+    ("White Sandwich Bread", 265, 0.45, "Bakery"),
+    ("Everything Bagels", 257, 0.80, "Bakery"),
+    ("Whole Wheat Tortilla Wraps", 285, 0.70, "Bakery"),
+    ("English Muffins", 235, 0.75, "Bakery"),
 
-    # Fruit
-    ("Banana", 89, 0.20, "Produce"),
-    ("Apple", 52, 0.35, "Produce"),
-    ("Avocado", 160, 1.20, "Produce"),
-    ("Blueberries", 57, 1.90, "Produce"),
-    ("Strawberries", 32, 1.30, "Produce"),
-    ("Orange", 47, 0.35, "Produce"),
-    ("Grapes", 69, 1.10, "Produce"),
-    ("Pineapple", 50, 0.45, "Produce"),
-    ("Mango", 60, 0.85, "Produce"),
+    # Vegetables (Produce)
+    ("Broccoli Crowns", 34, 0.60, "Produce"),
+    ("Sweet Potatoes", 86, 0.45, "Produce"),
+    ("Russet Baking Potatoes", 77, 0.30, "Produce"),
+    ("Baby Spinach (Bagged)", 23, 0.90, "Produce"),
+    ("Kale (Organic Green)", 49, 1.00, "Produce"),
+    ("Yellow/Red Onions", 40, 0.30, "Produce"),
+    ("Garlic Bulbs", 149, 1.40, "Produce"),
+    ("Red/Yellow Bell Peppers", 31, 1.10, "Produce"),
+    ("Carrots (Bagged)", 41, 0.35, "Produce"),
+    ("English Cucumber", 15, 0.55, "Produce"),
+    ("Beefsteak Tomatoes", 18, 0.65, "Produce"),
+    ("Cherry/Grape Tomatoes", 18, 1.20, "Produce"),
+    ("Zucchini Squash", 17, 0.65, "Produce"),
+    ("White Button Mushrooms", 22, 1.00, "Produce"),
+    ("Cremini Mushrooms", 26, 1.20, "Produce"),
+    ("Green Beans (Trimmed)", 31, 0.90, "Produce"),
+    ("Cauliflower Head", 25, 0.65, "Produce"),
+    ("Asparagus Spears", 20, 1.80, "Produce"),
+    ("Romaine Lettuce Hearts", 17, 0.60, "Produce"),
+    ("Celery Stalks", 16, 0.45, "Produce"),
+    ("Brussels Sprouts", 43, 0.85, "Produce"),
+
+    # Fruit (Produce)
+    ("Bananas (Yellow)", 89, 0.20, "Produce"),
+    ("Gala/Honeycrisp Apples", 52, 0.35, "Produce"),
+    ("Hass Avocados", 160, 1.20, "Produce"),
+    ("Fresh Blueberries (Pint)", 57, 1.90, "Produce"),
+    ("Fresh Strawberries", 32, 1.30, "Produce"),
+    ("Navel Oranges", 47, 0.35, "Produce"),
+    ("Seedless Green/Red Grapes", 69, 1.10, "Produce"),
+    ("Whole Pineapple", 50, 0.45, "Produce"),
+    ("Ataulfo/Red Mango", 60, 0.85, "Produce"),
+    ("Lemons/Limes", 29, 0.60, "Produce"),
+
+    # Frozen
     ("Frozen Mixed Berries", 55, 1.10, "Frozen"),
+    ("Frozen Blueberries (Wild)", 57, 1.20, "Frozen"),
+    ("Frozen Sweet Corn", 86, 0.50, "Frozen"),
+    ("Frozen Green Peas", 81, 0.45, "Frozen"),
+    ("Frozen Mixed Vegetables", 65, 0.45, "Frozen"),
+    ("Frozen Broccoli Florets", 34, 0.50, "Frozen"),
 
-    # Nuts, seeds, fats
-    ("Almonds", 579, 2.50, "Pantry"),
-    ("Peanut Butter", 588, 1.10, "Pantry"),
-    ("Almond Butter", 614, 2.60, "Pantry"),
-    ("Walnuts", 654, 3.10, "Pantry"),
-    ("Chia Seeds", 486, 2.40, "Pantry"),
-    ("Flaxseed (Ground)", 534, 1.60, "Pantry"),
-    ("Olive Oil", 884, 1.50, "Pantry"),
-    ("Coconut Oil", 862, 1.90, "Pantry"),
-    ("Avocado Oil", 884, 2.40, "Pantry"),
+    # Nuts, Seeds, Oils & Fats
+    ("Raw Almonds", 579, 2.50, "Pantry"),
+    ("Natural Peanut Butter", 588, 1.10, "Pantry"),
+    ("Almond Butter (Pure)", 614, 2.60, "Pantry"),
+    ("Raw Walnuts (Halves)", 654, 3.10, "Pantry"),
+    ("Chia Seeds (Black)", 486, 2.40, "Pantry"),
+    ("Flaxseed (Ground/Milled)", 534, 1.60, "Pantry"),
+    ("Pumpkin Seeds / Pepitas", 559, 2.20, "Pantry"),
+    ("Extra Virgin Olive Oil", 884, 1.50, "Pantry"),
+    ("Organic Coconut Oil", 862, 1.90, "Pantry"),
+    ("Pure Avocado Oil", 884, 2.40, "Pantry"),
 
-    # Condiments / pantry / misc
-    ("Honey", 304, 1.20, "Pantry"),
-    ("Maple Syrup", 260, 1.80, "Pantry"),
-    ("Salsa", 36, 0.70, "Pantry"),
-    ("Hummus", 166, 1.20, "Pantry"),
-    ("Soy Sauce", 53, 0.60, "Pantry"),
-    ("Hot Sauce", 12, 0.90, "Pantry"),
-    ("Ketchup", 112, 0.55, "Pantry"),
-    ("Mustard", 66, 0.55, "Pantry"),
-    ("Protein Bar", 380, 4.50, "Supplements"),
-    ("Dark Chocolate (70%+)", 598, 3.20, "Pantry"),
-    ("Coffee (Ground)", 2, 2.00, "Beverages"),
-    ("Almond Milk (Unsweetened)", 15, 0.35, "Beverages"),
+    # Pantry Staples & Canned Goods
+    ("Canned Black Beans", 132, 0.35, "Pantry"),
+    ("Canned Chickpeas / Garbanzo", 164, 0.35, "Pantry"),
+    ("Canned Kidney Beans", 127, 0.35, "Pantry"),
+    ("Dry Green/Brown Lentils", 353, 0.55, "Pantry"),
+    ("Crushed Tomatoes (Canned)", 32, 0.35, "Pantry"),
+    ("Tomato Paste", 82, 0.60, "Pantry"),
+    ("Chicken Broth (Low Sodium)", 15, 0.30, "Pantry"),
+    ("Beef Broth", 17, 0.30, "Pantry"),
+    ("Pure Raw Honey", 304, 1.20, "Pantry"),
+    ("Pure Canadian Maple Syrup", 260, 1.80, "Pantry"),
+    ("Chunky Salsa", 36, 0.70, "Pantry"),
+    ("Traditional Hummus", 166, 1.20, "Pantry"),
+    ("Soy Sauce (Low Sodium)", 53, 0.60, "Pantry"),
+    ("Hot Sauce / Sriracha", 12, 0.90, "Pantry"),
+    ("Tomato Ketchup", 112, 0.55, "Pantry"),
+    ("Yellow/Dijon Mustard", 66, 0.55, "Pantry"),
+    ("Dark Chocolate Bars (70%+)", 598, 3.20, "Pantry"),
+
+    # Supplements & Beverages
+    ("Whey Protein Isolate/Concentrate", 379, 3.50, "Supplements"),
+    ("Plant-Based Vegan Protein Powder", 370, 4.20, "Supplements"),
+    ("Casein Protein Powder", 360, 3.80, "Supplements"),
+    ("Creatine Monohydrate Powder", 0, 5.00, "Supplements"),
+    ("High-Protein Bar", 380, 4.50, "Supplements"),
+    ("Ground Coffee Beans", 2, 2.00, "Beverages"),
+    ("Unsweetened Almond Milk", 15, 0.35, "Beverages"),
+    ("Oat Milk (Barista/Original)", 45, 0.45, "Beverages"),
+    ("Green Tea Bags", 1, 1.20, "Beverages"),
 ]
 
-# name, category — a broad, gym-realistic exercise library
+# Comprehensive Exercise Library with Multi-Muscle target groups
 EXERCISE_LIBRARY = [
-    # Legs
-    ("Barbell Back Squat", "Legs"),
-    ("Barbell Front Squat", "Legs"),
-    ("Goblet Squat", "Legs"),
-    ("Bulgarian Split Squat", "Legs"),
-    ("Walking Lunge", "Legs"),
-    ("Leg Press", "Legs"),
-    ("Leg Curl", "Legs"),
-    ("Leg Extension", "Legs"),
-    ("Calf Raise", "Legs"),
-    ("Seated Calf Raise", "Legs"),
-    ("Nordic Curl", "Legs"),
-    ("Hip Thrust", "Legs"),
-    ("Box Jump", "Legs"),
-    ("Step Up", "Legs"),
-    # Back / posterior chain
-    ("Conventional Deadlift", "Back/Legs"),
-    ("Romanian Deadlift", "Back/Legs"),
-    ("Sumo Deadlift", "Back/Legs"),
-    ("Pull Up", "Back"),
-    ("Chin Up", "Back"),
-    ("Barbell Row", "Back"),
-    ("Pendlay Row", "Back"),
-    ("Dumbbell Row", "Back"),
-    ("Lat Pulldown", "Back"),
-    ("Seated Cable Row", "Back"),
-    ("Face Pull", "Back"),
-    ("Back Extension", "Back"),
-    # Chest
-    ("Barbell Bench Press", "Chest"),
-    ("Incline Barbell Bench Press", "Chest"),
-    ("Incline Dumbbell Press", "Chest"),
-    ("Flat Dumbbell Press", "Chest"),
-    ("Push Up", "Chest"),
-    ("Cable Fly", "Chest"),
-    ("Dip", "Chest"),
-    # Shoulders
-    ("Overhead Press", "Shoulders"),
-    ("Seated Dumbbell Shoulder Press", "Shoulders"),
-    ("Lateral Raise", "Shoulders"),
-    ("Front Raise", "Shoulders"),
-    ("Rear Delt Fly", "Shoulders"),
-    ("Arnold Press", "Shoulders"),
-    # Arms
-    ("Dumbbell Bicep Curl", "Arms"),
-    ("Barbell Bicep Curl", "Arms"),
-    ("Hammer Curl", "Arms"),
-    ("Tricep Rope Pushdown", "Arms"),
-    ("Skull Crusher", "Arms"),
-    ("Close Grip Bench Press", "Arms"),
-    # Olympic / power
-    ("Power Clean", "Olympic"),
-    ("Hang Clean", "Olympic"),
-    ("Snatch", "Olympic"),
-    ("Clean and Jerk", "Olympic"),
-    ("Push Press", "Olympic"),
-    # Core
-    ("Plank", "Core"),
-    ("Hanging Leg Raise", "Core"),
-    ("Cable Woodchopper", "Core"),
+    # Quads & Lower Body Anterior
+    ("Barbell Back Squat", "Quads, Glutes, Core"),
+    ("Barbell Front Squat", "Quads, Core"),
+    ("Goblet Squat", "Quads, Glutes, Core"),
+    ("Bulgarian Split Squat", "Quads, Glutes"),
+    ("Walking Lunge", "Quads, Glutes"),
+    ("Reverse Lunge", "Quads, Glutes"),
+    ("Leg Press 45-Degree", "Quads, Glutes"),
+    ("Hack Squat Machine", "Quads, Glutes"),
+    ("Leg Extension Machine", "Quads"),
+    ("Step Up (Weighted)", "Quads, Glutes"),
+    ("Box Jump", "Quads, Glutes, Conditioning"),
+
+    # Hamstrings, Glutes & Posterior Chain
+    ("Conventional Deadlift", "Hamstrings, Glutes, Back"),
+    ("Romanian Deadlift (RDL)", "Hamstrings, Glutes, Back"),
+    ("Stiff-Leg Deadlift", "Hamstrings, Glutes"),
+    ("Sumo Deadlift", "Glutes, Quads, Back"),
+    ("Seated Leg Curl", "Hamstrings"),
+    ("Lying Hamstring Curl", "Hamstrings"),
+    ("Nordic Hamstring Curl", "Hamstrings"),
+    ("Barbell Hip Thrust", "Glutes, Hamstrings"),
+    ("Glute Bridge", "Glutes"),
+    ("Cable Pull-Through", "Glutes, Hamstrings"),
+    ("Back Extension / Hyperextension", "Hamstrings, Glutes, Back"),
+    ("Good Morning", "Hamstrings, Back"),
+
+    # Calves
+    ("Standing Calf Raise (Machine/Smith)", "Calves"),
+    ("Seated Calf Raise", "Calves"),
+    ("Donkey Calf Raise", "Calves"),
+    ("Leg Press Calf Raise", "Calves"),
+
+    # Back (Lats, Traps, Rhomboids, Erector Spinae)
+    ("Pull Up (Overhead Grip)", "Back, Biceps"),
+    ("Chin Up (Underhand Grip)", "Back, Biceps"),
+    ("Wide Grip Lat Pulldown", "Back, Biceps"),
+    ("Close Grip Neutral Pulldown", "Back, Biceps"),
+    ("Barbell Bent-Over Row", "Back, Biceps"),
+    ("Pendlay Row", "Back, Core"),
+    ("Single-Arm Dumbbell Row", "Back, Biceps"),
+    ("Seated Cable Row", "Back, Biceps"),
+    ("Chest-Supported Machine Row", "Back"),
+    ("T-Bar Row", "Back, Biceps"),
+    ("Straight-Arm Lat Pulldown", "Back"),
+    ("Face Pull (Rope)", "Back, Shoulders"),
+    ("Barbell Shrug", "Back, Shoulders"),
+
+    # Chest (Pectorals)
+    ("Barbell Flat Bench Press", "Chest, Triceps, Shoulders"),
+    ("Incline Barbell Bench Press", "Chest, Shoulders, Triceps"),
+    ("Decline Barbell Bench Press", "Chest, Triceps"),
+    ("Flat Dumbbell Bench Press", "Chest, Triceps"),
+    ("Incline Dumbbell Press", "Chest, Shoulders"),
+    ("Dumbbell Fly (Flat/Incline)", "Chest"),
+    ("Cable Fly / Crossover", "Chest"),
+    ("Pec Deck Machine Fly", "Chest"),
+    ("Weighted Dip (Chest Focus)", "Chest, Triceps"),
+    ("Push Up (Standard/Deficit)", "Chest, Triceps, Core"),
+
+    # Shoulders (Deltoids)
+    ("Seated Dumbbell Shoulder Press", "Shoulders, Triceps"),
+    ("Standing Barbell Overhead Press", "Shoulders, Triceps, Core"),
+    ("Arnold Dumbbell Press", "Shoulders, Triceps"),
+    ("Dumbbell Lateral Raise", "Shoulders"),
+    ("Cable Lateral Raise", "Shoulders"),
+    ("Machine Shoulder Press", "Shoulders, Triceps"),
+    ("Front Dumbbell/Plate Raise", "Shoulders"),
+    ("Rear Delt Cable Fly", "Shoulders, Back"),
+    ("Rear Delt Machine Fly", "Shoulders, Back"),
+    ("Upright Row", "Shoulders, Back"),
+
+    # Biceps & Forearms
+    ("Standing Barbell Bicep Curl", "Biceps"),
+    ("EZ-Bar Curl", "Biceps"),
+    ("Alternating Dumbbell Curl", "Biceps"),
+    ("Incline Dumbbell Bicep Curl", "Biceps"),
+    ("Hammer Curl (Dumbbell/Rope)", "Biceps"),
+    ("Preacher Curl (Machine/Bar)", "Biceps"),
+    ("Cable Curl (Straight/Rope)", "Biceps"),
+    ("Concentration Curl", "Biceps"),
+    ("Wrist Curl / Reverse Wrist Curl", "Biceps"),
+
+    # Triceps
+    ("Tricep Rope Pushdown", "Triceps"),
+    ("V-Bar / Straight-Bar Pushdown", "Triceps"),
+    ("Overhead Tricep Extension (Dumbbell/Cable)", "Triceps"),
+    ("Skull Crusher (EZ-Bar Lying Extension)", "Triceps"),
+    ("Close Grip Bench Press", "Triceps, Chest"),
+    ("Bench Dip / Parallel Bar Dip", "Triceps, Chest"),
+    ("Single-Arm Cable Kickback", "Triceps"),
+
+    # Core & Abdominals
+    ("Plank / Forearm Plank", "Core"),
+    ("Hanging Leg/Knee Raise", "Core"),
+    ("Cable Woodchopper (High-to-Low / Low-to-High)", "Core"),
     ("Ab Wheel Rollout", "Core"),
-    ("Russian Twist", "Core"),
-    ("Weighted Sit Up", "Core"),
-    # Conditioning / speed (for return-to-sport athletes)
-    ("Sled Push", "Conditioning"),
-    ("Sled Drag", "Conditioning"),
-    ("Farmers Carry", "Conditioning"),
-    ("Battle Ropes", "Conditioning"),
-    ("Assault Bike Sprint", "Conditioning"),
-    ("Rowing Machine", "Conditioning"),
-    ("40-Yard Sprint", "Speed"),
-    ("Shuttle Run", "Speed"),
-    ("Broad Jump", "Speed"),
-    ("Agility Ladder Drill", "Speed"),
+    ("Russian Twist (Weighted/Bodyweight)", "Core"),
+    ("Decline Weighted Sit Up", "Core"),
+    ("Cable Crunch", "Core"),
+    ("Dead Bug", "Core"),
+    ("Side Plank", "Core"),
+
+    # Olympic & Explosive Power
+    ("Power Clean", "Olympic, Back, Quads, Shoulders"),
+    ("Hang Clean", "Olympic, Back, Quads"),
+    ("Barbell Snatch", "Olympic, Back, Shoulders, Quads"),
+    ("Clean and Jerk", "Olympic, Quads, Shoulders, Back"),
+    ("Push Press", "Olympic, Shoulders, Quads, Triceps"),
+    ("Kettlebell Swing", "Olympic, Glutes, Hamstrings, Back"),
+
+    # Conditioning, Speed & Athletic Work
+    ("Sled Push (Heavy)", "Conditioning, Quads, Glutes"),
+    ("Sled Drag (Backward/Forward)", "Conditioning, Quads"),
+    ("Farmers Carry (Heavy Dumbbell/Trap Bar)", "Conditioning, Core, Back"),
+    ("Battle Ropes (Intervals)", "Conditioning, Shoulders, Core"),
+    ("Assault Bike Sprint Intervals", "Conditioning, Quads"),
+    ("Rowing Machine (Erg Sprints)", "Conditioning, Back, Quads"),
+    ("40-Yard Sprint / Acceleration Drill", "Conditioning, Quads, Hamstrings"),
+    ("Shuttle Run / Pro Agility", "Conditioning"),
+    ("Standing Broad Jump", "Conditioning, Quads, Glutes"),
+    ("Agility Ladder Quick Feet Drills", "Conditioning"),
 ]
 
 

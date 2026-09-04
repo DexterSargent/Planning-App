@@ -10,6 +10,7 @@
   --muted: #64748b;
   --accent: #2563eb;
   --accent-strong: #1d4ed8;
+  --primary: #2563eb;
   --button-text: #ffffff;
   --button-bg: #1f2937;
   --button-hover: #111827;
@@ -35,6 +36,7 @@
   --muted: #94a3b8;
   --accent: #38bdf8;
   --accent-strong: #0ea5e9;
+  --primary: #38bdf8;
   --button-text: #0f172a;
   --input-bg: rgba(255, 255, 255, 0.08);
   --secondary-bg: rgba(255, 255, 255, 0.08);
@@ -891,6 +893,13 @@ button.active {
   padding-bottom: 12px;
 }
 
+.week-time-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--background);
+}
+
 .week-time-header,
 .week-time-cell,
 .day-time-cell {
@@ -910,6 +919,9 @@ button.active {
   padding: 14px 8px;
   border-radius: 20px;
   background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
   border: 1px solid var(--border);
 }
 
@@ -1035,6 +1047,11 @@ button.active {
   .calendar-grid {
     grid-template-columns: 1fr;
   }
+
+  /* Make Workout Builder 2-column grid stack responsive on medium/smaller screens */
+  .tabbed-layout > div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1055,3 +1072,26 @@ button.active {
     flex-direction: column;
   }
 }
+
+/* Interactive Muscle SVG animations & hover states */
+svg path[title]:hover {
+  filter: brightness(1.25) drop-shadow(0 0 6px rgba(255, 255, 255, 0.75));
+  cursor: pointer;
+}
+
+/* Analytics Dashboard Styles & Responsive Layouts */
+.analytics-grid {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@media (max-width: 960px) {
+  .analytics-grid > div[style*="grid-template-columns: minmax(320px, 1.1fr) minmax(320px, 1.3fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+

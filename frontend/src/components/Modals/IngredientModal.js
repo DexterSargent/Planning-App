@@ -46,6 +46,16 @@ export default function IngredientModal({
           }
           placeholder="Meat & Poultry"
         />
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={Boolean(ingredientForm.in_inventory)}
+            onChange={(e) =>
+              setIngredientForm((prev) => ({ ...prev, in_inventory: e.target.checked ? 1 : 0 }))
+            }
+          />
+          In Stock (Available in Pantry)
+        </label>
         <div className="modal-actions">
           <button className="secondary-button" onClick={() => setIngredientModalVisible(false)}>
             Cancel

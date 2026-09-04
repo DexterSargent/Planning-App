@@ -1,5 +1,20 @@
 import React from 'react';
 
+const MUSCLE_CATEGORIES = [
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Biceps',
+  'Triceps',
+  'Quads',
+  'Hamstrings',
+  'Glutes',
+  'Calves',
+  'Core',
+  'Olympic',
+  'Conditioning',
+];
+
 export default function ExerciseModal({
   exerciseModalVisible,
   setExerciseModalVisible,
@@ -9,6 +24,21 @@ export default function ExerciseModal({
   handleSaveExercise,
 }) {
   if (!exerciseModalVisible) return null;
+
+  const currentCategories = (exerciseForm.category || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const toggleCategory = (cat) => {
+    let next;
+    if (currentCategories.includes(cat)) {
+      next = currentCategories.filter((c) => c !== cat);
+    } else {
+      next = [...currentCategories, cat];
+    }
+    setExerciseForm((prev) => ({ ...prev, category: next.join(', ') }));
+  };
 
   return (
     <div className="modal-overlay" onClick={() => setExerciseModalVisible(false)}>
@@ -22,15 +52,45 @@ export default function ExerciseModal({
           }
           placeholder="Barbell Back Squat"
         />
-        <label>Category</label>
+        
+        <label>Target Muscle Group(s) (Multi-Select)</label>
+        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
+          Click one or more muscle groups that this exercise targets:
+        </span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+          {MUSCLE_CATEGORIES.map((cat) => {
+            const isSelected = currentCategories.includes(cat);
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => toggleCategory(cat)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '16px',
+                  fontSize: '0.8rem',
+                  fontWeight: isSelected ? 600 : 400,
+                  border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                  background: isSelected ? 'var(--primary)' : 'var(--bg)',
+                  color: isSelected ? '#fff' : 'var(--text)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {isSelected ? '✓ ' : '+ '}{cat}
+              </button>
+            );
+          })}
+        </div>
         <input
-          value={exerciseForm.category}
+          value={exerciseForm.category || ''}
           onChange={(e) =>
             setExerciseForm((prev) => ({ ...prev, category: e.target.value }))
           }
-          placeholder="Lower body"
+          placeholder="Comma-separated muscles (e.g. Quads, Glutes, Core)"
         />
-        <label>Optional 1RM</label>
+        
+        <label>Optional 1RM (lbs)</label>
         <input
           value={exerciseForm.one_rm}
           onChange={(e) =>

@@ -1,5 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { getMonthTitle, formatDateFull, CALENDAR_ROW_HEIGHT } from '../../utils/dateUtils';
+import WeeklyTemplateView from './WeeklyTemplateView';
+import WeeklyMealPlannerModal from './WeeklyMealPlannerModal';
+import WeeklyWorkoutPlannerModal from './WeeklyWorkoutPlannerModal';
+import { fetchJson } from '../../services/api';
 
 export default function Schedule({
   scheduleView,
@@ -26,18 +30,56 @@ export default function Schedule({
   handleEventResizeStart,
   changeDay,
   currentDayEvents,
+  onGenerateGroceryList,
+  weeklyTemplate,
+  fetchWeeklyTemplate,
+  recipes = [],
+  refreshAll,
+  workouts,
+  workoutExercises,
+  userSettings,
 }) {
+  const [mealPlannerModalVisible, setMealPlannerModalVisible] = useState(false);
+  const [workoutPlannerModalVisible, setWorkoutPlannerModalVisible] = useState(false);
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
+
+  const handleOpenMealPlanner = async () => {
+    if (refreshAll) await refreshAll();
+    setMealPlannerModalVisible(true);
+  };
+
+  const handleOpenWorkoutPlanner = async () => {
+    if (refreshAll) await refreshAll();
+    setWorkoutPlannerModalVisible(true);
+  };
+
+  const handleApplyTemplate = async () => {
+    if (!weekDates || !weekDates[0]?.date) return;
+    setApplyingTemplate(true);
+    try {
+      await fetchJson('/schedule/template/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ week_start_date: weekDates[0].date }),
+      });
+      if (refreshAll) await refreshAll();
+    } catch (err) {
+      console.error('Error applying template:', err);
+    } finally {
+      setApplyingTemplate(false);
+    }
+  };
   return (
     <section className="schedule-layout schedule-calendar-layout">
       <div className="schedule-header schedule-calendar-header">
         <div className="view-tabs">
-          {['month', 'week', 'day'].map((view) => (
+          {['month', 'week', 'day', 'template'].map((view) => (
             <button
               key={view}
               className={scheduleView === view ? 'active' : ''}
               onClick={() => setScheduleView(view)}
             >
-              {view === 'month' ? 'Month' : view === 'week' ? 'Week' : 'Day'}
+              {view === 'month' ? 'Month' : view === 'week' ? 'Week' : view === 'day' ? 'Day' : 'Weekly Template'}
             </button>
           ))}
         </div>
@@ -124,7 +166,7 @@ export default function Schedule({
 
         {scheduleView === 'week' && (
           <div className="week-view">
-            <div className="week-view-header schedule-nav-row">
+            <div className="week-view-header schedule-nav-row" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button className="icon-button" onClick={() => changeWeek(-1)}>
                 ‹
               </button>
@@ -132,6 +174,38 @@ export default function Schedule({
               <button className="icon-button" onClick={() => changeWeek(1)}>
                 ›
               </button>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  className="secondary-button"
+                  style={{ fontSize: '0.85rem', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)', border: '1px solid var(--primary)' }}
+                  onClick={handleApplyTemplate}
+                  disabled={applyingTemplate}
+                  title="Autopopulate this week with your recurring blocks and meal times from your template"
+                >
+                  {applyingTemplate ? 'Filling Week...' : '⚡ Autopopulate Week'}
+                </button>
+                <button
+                  className="secondary-button"
+                  style={{ fontSize: '0.85rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid #10b981' }}
+                  onClick={handleOpenMealPlanner}
+                >
+                  🍽️ Plan Meals for this Week
+                </button>
+                <button
+                  className="secondary-button"
+                  style={{ fontSize: '0.85rem', background: 'rgba(37, 99, 235, 0.1)', color: 'var(--primary)', border: '1px solid var(--primary)' }}
+                  onClick={handleOpenWorkoutPlanner}
+                >
+                  💪 Plan Workouts for this Week
+                </button>
+                <button
+                  className="secondary-button"
+                  style={{ fontSize: '0.85rem' }}
+                  onClick={() => onGenerateGroceryList && onGenerateGroceryList(weekDates[0]?.date, weekDates[weekDates.length - 1]?.date, weekRangeLabel)}
+                >
+                  🛒 Generate grocery list
+                </button>
+              </div>
             </div>
             <div className="week-grid-wrapper" ref={weekGridRef}>
               <div className="week-grid week-calendar-grid">
@@ -196,7 +270,7 @@ export default function Schedule({
                         onPointerDown={(e) => handleEventPointerDown(e, event)}
                         onPointerUp={(e) => handleEventPointerUp(e, event)}
                       >
-                        <strong>{event.title || event.event_type.replace(/ .*/, '')}</strong>
+                        <strong>{event.is_completed ? '✓ ' : ''}{event.title || event.event_type.replace(/ .*/, '')}</strong>
                         <small>{event.start_time || 'All day'}</small>
                         <div
                           className="resize-handle"
@@ -282,7 +356,7 @@ export default function Schedule({
                         onPointerDown={(e) => handleEventPointerDown(e, event)}
                         onPointerUp={(e) => handleEventPointerUp(e, event)}
                       >
-                        <strong>{event.title || event.event_type.replace(/ .*/, '')}</strong>
+                        <strong>{event.is_completed ? '✓ ' : ''}{event.title || event.event_type.replace(/ .*/, '')}</strong>
                         <small>{event.start_time || 'All day'}</small>
                         <div
                           className="resize-handle"
@@ -299,7 +373,36 @@ export default function Schedule({
             </div>
           </div>
         )}
+
+        {scheduleView === 'template' && (
+          <WeeklyTemplateView
+            weeklyTemplate={weeklyTemplate}
+            fetchWeeklyTemplate={fetchWeeklyTemplate}
+            eventColors={eventColors}
+            workouts={workouts}
+            userSettings={userSettings}
+          />
+        )}
       </div>
+
+      <WeeklyMealPlannerModal
+        visible={mealPlannerModalVisible}
+        onClose={() => setMealPlannerModalVisible(false)}
+        weekDates={weekDates}
+        recipes={recipes}
+        events={events}
+        refreshAll={refreshAll}
+      />
+      
+      <WeeklyWorkoutPlannerModal
+        visible={workoutPlannerModalVisible}
+        onClose={() => setWorkoutPlannerModalVisible(false)}
+        weekDates={weekDates}
+        workouts={workouts}
+        workoutExercises={workoutExercises}
+        events={events}
+        refreshAll={refreshAll}
+      />
     </section>
   );
 }
