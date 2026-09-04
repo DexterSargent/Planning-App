@@ -35,6 +35,9 @@ class PyODBCDictCursor:
         cols = [column[0] for column in self.cursor.description]
         return [dict(zip(cols, row)) for row in rows]
         
+    def __iter__(self):
+        return iter(self.fetchall())
+        
     def fetchone(self):
         row = self.cursor.fetchone()
         if not row: return None
