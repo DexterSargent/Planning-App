@@ -111,7 +111,7 @@ class DatabaseManager:
         c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='ingredients' and xtype='U')
 CREATE TABLE ingredients (
                         id INT IDENTITY(1,1) PRIMARY KEY,
-                        name NVARCHAR(MAX) NOT NULL UNIQUE,
+                        name NVARCHAR(255) NOT NULL UNIQUE,
                         kcal_per_100g FLOAT NOT NULL,
                         cost_per_100g FLOAT NOT NULL,
                         category NVARCHAR(MAX),
@@ -122,7 +122,7 @@ CREATE TABLE ingredients (
         c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='exercises' and xtype='U')
 CREATE TABLE exercises (
                         id INT IDENTITY(1,1) PRIMARY KEY,
-                        name NVARCHAR(MAX) NOT NULL UNIQUE,
+                        name NVARCHAR(255) NOT NULL UNIQUE,
                         category NVARCHAR(MAX),
                         one_rm FLOAT,
                         created_at DATETIME2
@@ -222,7 +222,7 @@ CREATE TABLE nutrition_logs (
 
         c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='user_settings' and xtype='U')
 CREATE TABLE user_settings (
-                        key NVARCHAR(MAX) PRIMARY KEY,
+                        [key] NVARCHAR(255) PRIMARY KEY,
                         value NVARCHAR(MAX)
                     )""")
 
@@ -311,7 +311,7 @@ CREATE TABLE weekly_schedule_template (
 
         c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='user_settings' and xtype='U')
 CREATE TABLE user_settings (
-                        key NVARCHAR(MAX) PRIMARY KEY,
+                        [key] NVARCHAR(255) PRIMARY KEY,
                         value NVARCHAR(MAX)
                     )""")
         c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='grocery_lists' and xtype='U')
