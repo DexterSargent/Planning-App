@@ -181,7 +181,7 @@ CREATE TABLE calendar_events (
                         id INT IDENTITY(1,1) PRIMARY KEY,
                         title NVARCHAR(MAX) NOT NULL,
                         event_type NVARCHAR(MAX) NOT NULL,
-                        event_date NVARCHAR(MAX) NOT NULL,
+                        event_date NVARCHAR(255) NOT NULL,
                         start_time NVARCHAR(MAX),
                         duration_mins INTEGER,
                         ref_workout_id INTEGER,
@@ -203,7 +203,7 @@ CREATE TABLE calendar_events (
 CREATE TABLE lift_logs (
                         id INT IDENTITY(1,1) PRIMARY KEY,
                         exercise_id INTEGER NOT NULL,
-                        log_date NVARCHAR(MAX) NOT NULL,
+                        log_date NVARCHAR(255) NOT NULL,
                         weight NVARCHAR(MAX) NOT NULL,
                         sets INTEGER,
                         reps INTEGER,
@@ -214,7 +214,7 @@ CREATE TABLE lift_logs (
         c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='nutrition_logs' and xtype='U')
 CREATE TABLE nutrition_logs (
                         id INT IDENTITY(1,1) PRIMARY KEY,
-                        log_date NVARCHAR(MAX) NOT NULL,
+                        log_date NVARCHAR(255) NOT NULL,
                         kcal FLOAT NOT NULL,
                         cost FLOAT,
                         created_at DATETIME2
@@ -256,7 +256,7 @@ CREATE TABLE weekly_schedule_template (
 
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_calendar_event_date') CREATE INDEX idx_calendar_event_date ON calendar_events(event_date)")
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_lift_logs_exercise_date') CREATE INDEX idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date)")
-        c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_body_logs_date') CREATE INDEX idx_body_logs_date ON body_logs(log_date)")
+
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_nutrition_logs_date') CREATE INDEX idx_nutrition_logs_date ON nutrition_logs(log_date)")
 
         self.conn.commit()
@@ -306,7 +306,7 @@ CREATE TABLE weekly_schedule_template (
 
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_calendar_event_date') CREATE INDEX idx_calendar_event_date ON calendar_events(event_date)")
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_lift_logs_exercise_date') CREATE INDEX idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date)")
-        c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_body_logs_date') CREATE INDEX idx_body_logs_date ON body_logs(log_date)")
+
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_nutrition_logs_date') CREATE INDEX idx_nutrition_logs_date ON nutrition_logs(log_date)")
 
         c.execute("""IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='user_settings' and xtype='U')
