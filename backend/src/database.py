@@ -253,6 +253,13 @@ CREATE TABLE weekly_schedule_template (
                         created_at DATETIME2,
                         FOREIGN KEY(ref_workout_id) REFERENCES workouts(id) ON DELETE CASCADE
                     )""")
+        # Fix column types for partially created tables in Azure SQL
+        try:
+            c.execute("ALTER TABLE calendar_events ALTER COLUMN event_date NVARCHAR(255) NOT NULL")
+            c.execute("ALTER TABLE lift_logs ALTER COLUMN log_date NVARCHAR(255) NOT NULL")
+            c.execute("ALTER TABLE nutrition_logs ALTER COLUMN log_date NVARCHAR(255) NOT NULL")
+        except Exception:
+            pass
 
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_calendar_event_date') CREATE INDEX idx_calendar_event_date ON calendar_events(event_date)")
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_lift_logs_exercise_date') CREATE INDEX idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date)")
