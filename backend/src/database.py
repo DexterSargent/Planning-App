@@ -15,8 +15,8 @@ lost) but adds:
 
 import json
 import pyodbc
-import threading
 import time
+import threading
 from datetime import datetime, date, timedelta
 
 
