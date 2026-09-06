@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Settings, Plus, Zap, Utensils, Dumbbell, ShoppingCart } from 'lucide-react';
 import { getMonthTitle, formatDateFull, CALENDAR_ROW_HEIGHT } from '../../utils/dateUtils';
 import WeeklyTemplateView from './WeeklyTemplateView';
 import WeeklyMealPlannerModal from './WeeklyMealPlannerModal';
@@ -182,28 +183,28 @@ export default function Schedule({
                   disabled={applyingTemplate}
                   title="Autopopulate this week with your recurring blocks and meal times from your template"
                 >
-                  {applyingTemplate ? 'Filling Week...' : '⚡ Autopopulate Week'}
+                  {applyingTemplate ? 'Filling Week...' : <><Zap size={16} className="inline-icon" /> Autopopulate Week</>}
                 </button>
                 <button
                   className="secondary-button"
                   style={{ fontSize: '0.85rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid #10b981' }}
                   onClick={handleOpenMealPlanner}
                 >
-                  🍽️ Plan Meals for this Week
+                  <Utensils size={16} className="inline-icon" /> Plan Meals for this Week
                 </button>
                 <button
                   className="secondary-button"
                   style={{ fontSize: '0.85rem', background: 'rgba(37, 99, 235, 0.1)', color: 'var(--primary)', border: '1px solid var(--primary)' }}
                   onClick={handleOpenWorkoutPlanner}
                 >
-                  💪 Plan Workouts for this Week
+                  <Dumbbell size={16} className="inline-icon" /> Plan Workouts for this Week
                 </button>
                 <button
                   className="secondary-button"
                   style={{ fontSize: '0.85rem' }}
                   onClick={() => onGenerateGroceryList && onGenerateGroceryList(weekDates[0]?.date, weekDates[weekDates.length - 1]?.date, weekRangeLabel)}
                 >
-                  🛒 Generate grocery list
+                  <ShoppingCart size={16} className="inline-icon" /> Generate grocery list
                 </button>
               </div>
             </div>

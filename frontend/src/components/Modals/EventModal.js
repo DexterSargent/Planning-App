@@ -1,4 +1,5 @@
 import React from 'react';
+import { Search } from 'lucide-react';
 import { fetchJson } from '../../services/api';
 
 export default function EventModal({
@@ -197,7 +198,7 @@ export default function EventModal({
             <div style={{ marginBottom: '6px' }}>
               <input
                 type="text"
-                placeholder="🔍 Search workouts by title..."
+                placeholder="Search workouts by title..."
                 value={workoutSearch}
                 onChange={(e) => setWorkoutSearch(e.target.value)}
                 style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text)' }}
@@ -252,7 +253,7 @@ export default function EventModal({
             <div style={{ marginBottom: '6px' }}>
               <input
                 type="text"
-                placeholder="🔍 Search recipes by title or meal type..."
+                placeholder="Search recipes by title or meal type..."
                 value={recipeSearch}
                 onChange={(e) => setRecipeSearch(e.target.value)}
                 style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text)' }}

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Search, Plus, Filter, CalendarDays, Settings, LogOut, FileText, Smartphone, ShoppingCart, ClipboardList } from 'lucide-react';
 import './App.css';
 import {
   parseISODateLocal,
@@ -1330,7 +1331,7 @@ function App() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <strong style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  🛒 Active Grocery List: {activeGroceryList.week_label || 'Weekly Shop'}
+                  <ShoppingCart size={18} className="inline-icon" /> Active Grocery List: {activeGroceryList.week_label || 'Weekly Shop'}
                 </strong>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                   Created on {new Date(activeGroceryList.created_at).toLocaleDateString()}
@@ -1358,7 +1359,7 @@ function App() {
                     setActiveTab('mealplan');
                   }}
                 >
-                  📋 Manage All Lists →
+                  <ClipboardList size={18} className="inline-icon" /> Manage All Lists →
                 </button>
                 <button
                   className="icon-button"

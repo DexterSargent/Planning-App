@@ -318,6 +318,8 @@ CREATE TABLE weekly_schedule_template (
             c.execute("ALTER TABLE weekly_schedule_template ADD commute_to_mins INTEGER")
         if "commute_from_mins" not in existing_template_cols:
             c.execute("ALTER TABLE weekly_schedule_template ADD commute_from_mins INTEGER")
+        if "created_at" not in existing_template_cols:
+            c.execute("ALTER TABLE weekly_schedule_template ADD created_at DATETIME2")
 
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_calendar_event_date') CREATE INDEX idx_calendar_event_date ON calendar_events(event_date)")
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_lift_logs_exercise_date') CREATE INDEX idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date)")

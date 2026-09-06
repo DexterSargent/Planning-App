@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import MuscleDiagram from './MuscleDiagram';
+import ExerciseModal from '../Modals/ExerciseModal';
+import { Search, Pin, Library } from 'lucide-react';
+import { fetchJson } from '../../services/api';
 
 export default function Training({
   trainingTab,
@@ -147,7 +150,7 @@ export default function Training({
             <div style={{ margin: '8px 0' }}>
               <input
                 type="text"
-                placeholder="🔍 Search exercises by title or muscle group..."
+                placeholder="Search exercises by title or muscle group..."
                 value={workoutExerciseSearch}
                 onChange={(e) => setWorkoutExerciseSearch(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text)' }}
@@ -263,7 +266,7 @@ export default function Training({
             <div className="card" style={{ padding: '16px', background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border)', maxHeight: '420px', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <h4 style={{ margin: 0, fontSize: '1rem' }}>
-                  {selectedMuscles && selectedMuscles.length > 0 ? `📌 Filtered (${diagramFilteredExercises.length}) [${selectedMuscles.join(', ')}]` : `📚 All Exercises (${diagramFilteredExercises.length})`}
+                  {selectedMuscles && selectedMuscles.length > 0 ? <><Pin size={16} className="inline-icon" /> Filtered ({diagramFilteredExercises.length}) [{selectedMuscles.join(', ')}]</> : <><Library size={16} className="inline-icon" /> All Exercises ({diagramFilteredExercises.length})</>}
                 </h4>
                 <button
                   type="button"
@@ -277,7 +280,7 @@ export default function Training({
               <div style={{ marginBottom: '10px' }}>
                 <input
                   type="text"
-                  placeholder="🔍 Filter list by exercise title or muscle..."
+                  placeholder="Filter list by exercise title or muscle..."
                   value={workoutExerciseSearch}
                   onChange={(e) => setWorkoutExerciseSearch(e.target.value)}
                   style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text)', fontSize: '0.85rem' }}

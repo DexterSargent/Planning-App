@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Dumbbell } from 'lucide-react';
 import { fetchJson } from '../../services/api';
 import MuscleDiagram from '../Training/MuscleDiagram';
 
@@ -134,7 +135,7 @@ export default function WeeklyWorkoutPlannerModal({
       <div className="modal-card" style={{ maxWidth: '1000px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
-            <h2 style={{ margin: 0 }}>💪 Plan Workouts for This Week</h2>
+            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}><Dumbbell size={24} /> Plan Workouts for This Week</h2>
             <p style={{ margin: '4px 0 0', color: 'var(--text-light)', fontSize: '0.85rem' }}>
               Assign workouts to your scheduled Training blocks and see your weekly muscle volume.
             </p>
@@ -218,7 +219,7 @@ export default function WeeklyWorkoutPlannerModal({
             Cancel
           </button>
           <button type="button" className="primary-button" onClick={handleApplyWorkoutPlan} disabled={saving || totalTrainingEvents === 0}>
-            {saving ? 'Saving...' : '💪 Save Workout Plan'}
+            {saving ? 'Saving...' : <><Dumbbell size={18} className="inline-icon" /> Save Workout Plan</>}
           </button>
         </div>
       </div>

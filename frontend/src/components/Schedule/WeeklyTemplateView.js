@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { CalendarDays, Zap, Search } from 'lucide-react';
 import { fetchJson } from '../../services/api';
 
 const DAYS_OF_WEEK = [
@@ -107,9 +108,9 @@ export default function WeeklyTemplateView({
     <div className="weekly-template-container" style={{ padding: '16px', background: 'var(--panel)', borderRadius: '12px', border: '1px solid var(--border)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text)' }}>🗓️ Default Weekly Schedule Template</h2>
+          <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}><CalendarDays size={20} /> Default Weekly Schedule Template</h2>
           <p style={{ margin: '4px 0 0', color: 'var(--text-light)', fontSize: '0.9rem' }}>
-            Set recurring weekly blocks and designated meal slots here. Use <strong>⚡ Autopopulate Week</strong> in the Week view to fill your schedule automatically!
+            Set recurring weekly blocks and designated meal slots here. Use <strong><Zap size={14} className="inline-icon" /> Autopopulate Week</strong> in the Week view to fill your schedule automatically!
           </p>
         </div>
         <button className="primary-button" onClick={() => handleOpenAdd('Monday', '09:00')}>
@@ -284,7 +285,7 @@ export default function WeeklyTemplateView({
                   <div style={{ marginBottom: '6px' }}>
                     <input
                       type="text"
-                      placeholder="🔍 Search workouts by title..."
+                      placeholder="Search workouts by title..."
                       value={workoutSearch}
                       onChange={(e) => setWorkoutSearch(e.target.value)}
                       style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text)' }}

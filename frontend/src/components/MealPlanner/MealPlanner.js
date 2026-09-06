@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Plus, X, Search, FileText, Archive, ShoppingCart, Check, Zap, Undo, Trash2 } from 'lucide-react';
 import { updateGroceryList, deleteGroceryList, createGroceryList } from '../../services/api';
 
 export default function MealPlanner({
@@ -166,7 +167,7 @@ export default function MealPlanner({
           onClick={() => setPlannerTab('groceries')}
           style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
         >
-          🛒 Grocery Lists
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><ShoppingCart size={18} /> Grocery Lists</div>
           {allGroceryLists.filter((l) => l.status !== 'completed').length > 0 && (
             <span style={{ background: 'var(--primary)', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '0.75rem' }}>
               {allGroceryLists.filter((l) => l.status !== 'completed').length}
@@ -245,7 +246,7 @@ export default function MealPlanner({
             <div style={{ margin: '8px 0' }}>
               <input
                 type="text"
-                placeholder="🔍 Search ingredients by title or category..."
+                placeholder="Search ingredients by title or category..."
                 value={recipeIngredientSearch}
                 onChange={(e) => setRecipeIngredientSearch(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text)' }}
@@ -406,7 +407,7 @@ export default function MealPlanner({
                 }}
                 onClick={() => setListFilter('active')}
               >
-                📝 Active ({allGroceryLists.filter((l) => l.status !== 'completed').length})
+                <FileText size={16} className="inline-icon" /> Active ({allGroceryLists.filter((l) => l.status !== 'completed').length})
               </button>
               <button
                 type="button"
@@ -418,7 +419,7 @@ export default function MealPlanner({
                 }}
                 onClick={() => setListFilter('archived')}
               >
-                🗄️ Completed / Archived ({allGroceryLists.filter((l) => l.status === 'completed').length})
+                <Archive size={16} className="inline-icon" /> Completed / Archived ({allGroceryLists.filter((l) => l.status === 'completed').length})
               </button>
             </div>
           </div>
@@ -475,7 +476,7 @@ export default function MealPlanner({
                               fontWeight: 600,
                             }}
                           >
-                            {list.status === 'completed' ? '✓ Completed' : '⚡ Active'}
+                            {list.status === 'completed' ? <><Check size={16} className="inline-icon" /> Completed</> : <><Zap size={16} className="inline-icon" /> Active</>}
                           </span>
                         </div>
                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
@@ -496,7 +497,7 @@ export default function MealPlanner({
                           }}
                           onClick={() => handleStatusToggle(list)}
                         >
-                          {list.status === 'completed' ? '↩️ Reopen List' : '✓ Mark Completed'}
+                          {list.status === 'completed' ? <><Undo size={16} className="inline-icon" /> Reopen List</> : <><Check size={16} className="inline-icon" /> Mark Completed</>}
                         </button>
                         <button
                           type="button"
@@ -504,7 +505,7 @@ export default function MealPlanner({
                           style={{ padding: '6px 12px', fontSize: '0.85rem', color: '#ef4444', borderColor: '#ef4444' }}
                           onClick={() => handleConfirmDelete(list.id)}
                         >
-                          🗑️ Delete
+                          <Trash2 size={16} className="inline-icon" /> Delete
                         </button>
                       </div>
                     </div>
@@ -594,7 +595,7 @@ export default function MealPlanner({
               })
             ) : (
               <div className="empty-state" style={{ padding: '40px', textAlign: 'center' }}>
-                <div style={{ fontSize: '2.5rem', marginBottom: '10px' }}>🛒</div>
+                <div style={{ marginBottom: '10px' }}><ShoppingCart size={40} color="var(--primary)" /></div>
                 <h3 style={{ margin: '0 0 6px 0' }}>No {listFilter} grocery lists found</h3>
                 <p style={{ margin: 0, color: 'var(--text-muted)' }}>
                   {listFilter === 'active'

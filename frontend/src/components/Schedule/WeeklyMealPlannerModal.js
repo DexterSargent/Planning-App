@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Utensils, Zap } from 'lucide-react';
 import { fetchJson } from '../../services/api';
 
 export default function WeeklyMealPlannerModal({
@@ -125,7 +126,7 @@ export default function WeeklyMealPlannerModal({
       <div className="modal-card" style={{ maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
-            <h2 style={{ margin: 0 }}>🍽️ Plan Meals for This Week</h2>
+            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}><Utensils size={24} /> Plan Meals for This Week</h2>
             <p style={{ margin: '4px 0 0', color: 'var(--text-light)', fontSize: '0.85rem' }}>
               Assign recipes to the Meal events already scheduled on your calendar this week.
             </p>
@@ -146,7 +147,7 @@ export default function WeeklyMealPlannerModal({
           <>
             {uniqueMealTitles.length > 0 && (
               <div style={{ background: 'var(--panel)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '16px' }}>
-                <strong style={{ fontSize: '0.9rem', display: 'block', marginBottom: '8px' }}>⚡ Quick Fill Across All Days</strong>
+                <strong style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}><Zap size={16} className="inline-icon" /> Quick Fill Across All Days</strong>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   {uniqueMealTitles.map((title) => (
                     <div key={`quick-${title}`} style={{ flex: 1, minWidth: '200px' }}>
@@ -237,7 +238,7 @@ export default function WeeklyMealPlannerModal({
                 Cancel
               </button>
               <button type="button" className="primary-button" onClick={handleApplyMealPlan} disabled={saving}>
-                {saving ? 'Saving...' : '🍽️ Save Meal Plan'}
+                {saving ? 'Saving...' : <><Utensils size={18} className="inline-icon" /> Save Meal Plan</>}
               </button>
             </div>
           </>

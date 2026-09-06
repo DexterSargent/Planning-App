@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import MuscleDiagram from '../Training/MuscleDiagram';
 import { fetchJson } from '../../services/api';
-import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, CartesianGrid, Legend } from 'recharts';
+import { TrendingUp, BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, CartesianGrid, Legend, Dumbbell, Utensils, LayoutDashboard } from 'lucide-react';
 
 const COLORS = ['#22c55e', '#3b82f6', '#f97316', '#a855f7', '#eab308', '#ef4444'];
 
@@ -250,7 +250,7 @@ export default function Analytics({ workouts = [], exercises = [], workoutExerci
       <div className="card" style={{ padding: '18px 22px', background: 'var(--card-bg)', borderRadius: '14px', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: '1.4rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            📈 Training & Performance Analytics
+            <TrendingUp size={24} /> Training & Performance Analytics
           </h2>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             Track your workout progression, dietary habits, and time management
@@ -272,21 +272,21 @@ export default function Analytics({ workouts = [], exercises = [], workoutExerci
           style={{ background: 'none', border: 'none', padding: '10px 16px', fontSize: '1rem', cursor: 'pointer', fontWeight: 600, color: activeTab === 'dashboard' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'dashboard' ? '2px solid var(--primary)' : '2px solid transparent' }}
           onClick={() => setActiveTab('dashboard')}
         >
-          📊 Dashboard
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><BarChart size={18} /> Dashboard</div>
         </button>
         <button
           type="button"
           style={{ background: 'none', border: 'none', padding: '10px 16px', fontSize: '1rem', cursor: 'pointer', fontWeight: 600, color: activeTab === 'training' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'training' ? '2px solid var(--primary)' : '2px solid transparent' }}
           onClick={() => setActiveTab('training')}
         >
-          🏋️ Training Graphs
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Dumbbell size={18} /> Training Graphs</div>
         </button>
         <button
           type="button"
           style={{ background: 'none', border: 'none', padding: '10px 16px', fontSize: '1rem', cursor: 'pointer', fontWeight: 600, color: activeTab === 'diet' ? 'var(--primary)' : 'var(--text-muted)', borderBottom: activeTab === 'diet' ? '2px solid var(--primary)' : '2px solid transparent' }}
           onClick={() => setActiveTab('diet')}
         >
-          🥗 Diet & Misc Data
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Utensils size={18} /> Diet & Misc Data</div>
         </button>
       </div>
 
@@ -353,8 +353,8 @@ export default function Analytics({ workouts = [], exercises = [], workoutExerci
             {/* Left: Overall Muscle Frequency Progress Bars & Drilldown */}
             <div className="card" style={{ padding: '18px', background: 'var(--card-bg)', borderRadius: '14px', border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
-                  {selectedAnalyticsMuscle ? `🔍 Drilldown: ${selectedAnalyticsMuscle}` : '📊 Top Muscle Volume Ranking'}
+                <h3 style={{ margin: 0, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {selectedAnalyticsMuscle ? <><Search size={18} /> Drilldown: {selectedAnalyticsMuscle}</> : <><BarChart size={18} /> Top Muscle Volume Ranking</>}
                 </h3>
                 {selectedAnalyticsMuscle && (
                   <button type="button" className="secondary-button" style={{ padding: '3px 10px', fontSize: '0.75rem' }} onClick={() => setSelectedAnalyticsMuscle(null)}>
@@ -418,7 +418,7 @@ export default function Analytics({ workouts = [], exercises = [], workoutExerci
             <div className="card" style={{ padding: '18px', background: 'var(--card-bg)', borderRadius: '14px', border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
                 <h3 style={{ margin: 0, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  🏋️ Lift Progression
+                  <Dumbbell size={20} /> Lift Progression
                 </h3>
 
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -494,7 +494,7 @@ export default function Analytics({ workouts = [], exercises = [], workoutExerci
           {/* Full Width: Total Volume Over Time */}
           <div className="card" style={{ padding: '18px', background: 'var(--card-bg)', borderRadius: '14px', border: '1px solid var(--border)' }}>
             <h3 style={{ margin: '0 0 14px 0', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              📈 Total Volume Over Time
+              <TrendingUp size={20} /> Total Volume Over Time
             </h3>
             <p style={{ margin: '0 0 16px 0', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
               Tracks total weight lifted across all exercises (Sets × Reps × Weight) per session to measure progressive overload.
@@ -532,7 +532,7 @@ export default function Analytics({ workouts = [], exercises = [], workoutExerci
           
           {/* Meal Frequency Bar Chart */}
           <div className="card" style={{ padding: '18px', background: 'var(--card-bg)', borderRadius: '14px', border: '1px solid var(--border)' }}>
-            <h3 style={{ margin: '0 0 14px 0', fontSize: '1.1rem' }}>🥗 Most Eaten Meals</h3>
+            <h3 style={{ margin: '0 0 14px 0', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '6px' }}><Utensils size={18} /> Most Eaten Meals</h3>
             {mealFrequenciesData.length > 0 ? (
               <div style={{ width: '100%', height: 350 }}>
                 <ResponsiveContainer>
