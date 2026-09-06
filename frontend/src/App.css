@@ -530,7 +530,7 @@ button.active {
 
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
   gap: 10px;
 }
 
@@ -666,7 +666,7 @@ button.active {
 
 .month-weekdays {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
   gap: 10px;
 }
 
@@ -678,8 +678,13 @@ button.active {
 
 .month-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
   gap: 10px;
+}
+
+.month-view,
+.schedule-calendar-body {
+  overflow-x: auto;
 }
 
 .month-row {
@@ -771,9 +776,22 @@ button.active {
   position: relative;
 }
 
+.week-grid-header {
+  display: grid;
+  grid-template-columns: 120px repeat(7, minmax(120px, 1fr));
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.day-calendar.week-row {
+  display: grid;
+  grid-template-columns: 120px minmax(840px, 1fr); /* 7 * 120px */
+  border-bottom: 1px solid var(--border);
+}
+
 .week-calendar-grid {
   display: grid;
-  grid-template-columns: 120px repeat(7, minmax(0, 1fr));
+  grid-template-columns: 120px repeat(7, minmax(120px, 1fr));
   grid-template-rows: 56px repeat(24, 84px);
   position: relative;
 }
@@ -969,7 +987,7 @@ button.active {
 @media (max-width: 960px) {
   .week-grid-row,
   .day-grid-row {
-    grid-template-columns: 80px repeat(7, minmax(0, 1fr));
+    grid-template-columns: 80px repeat(7, minmax(80px, 1fr));
   }
 }
 
@@ -986,7 +1004,7 @@ button.active {
 
   .week-grid-row,
   .day-grid-row {
-    grid-template-columns: 70px repeat(7, minmax(0, 1fr));
+    grid-template-columns: 70px repeat(7, minmax(80px, 1fr));
   }
 }
 
@@ -1108,7 +1126,8 @@ button.active {
   .inline-action-row,
   .modal-actions,
   .top-actions {
-    flex-direction: column;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 }
 
