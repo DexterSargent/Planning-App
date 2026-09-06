@@ -85,6 +85,11 @@ class DatabaseManager:
         max_retries = 5
         retry_delay = 5
         raw_conn = None
+        if "MARS_Connection=yes" not in db_name:
+            if not db_name.endswith(";"):
+                db_name += ";"
+            db_name += "MARS_Connection=yes;"
+            
         for attempt in range(max_retries):
             try:
                 raw_conn = pyodbc.connect(db_name, autocommit=True, timeout=30)
