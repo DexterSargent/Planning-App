@@ -11,7 +11,7 @@ export function SideNav({ activeTab, setActiveTab }) {
 
   return (
     <aside className="side-nav">
-      <div className="brand">Performance HQ</div>
+      <div className="brand">ChuckyHub</div>
       {tabs.map((tab) => (
         <button
           key={tab.id}

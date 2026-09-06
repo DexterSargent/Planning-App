@@ -438,7 +438,7 @@ CREATE TABLE grocery_lists (
         )
         row = cur.fetchone()
         self.conn.commit()
-        return row[0] if row else None
+        return list(row.values())[0] if row else None
 
     def get_all_ingredients(self):
         rows = self.conn.execute("SELECT * FROM ingredients ORDER BY name").fetchall()
@@ -483,7 +483,7 @@ CREATE TABLE grocery_lists (
         )
         row = cur.fetchone()
         self.conn.commit()
-        return row[0] if row else None
+        return list(row.values())[0] if row else None
 
     def update_exercise(self, exercise_id, name, category=None, one_rm=None):
         self.conn.execute(
@@ -556,7 +556,7 @@ CREATE TABLE grocery_lists (
             (name, total_kcal, total_cost, time_to_cook_mins, servings or 1,
              instructions, tags, meal_type or 'supper', datetime.now().isoformat()),
         )
-        recipe_id = cur.fetchone()[0]
+        row = cur.fetchone(); recipe_id = list(row.values())[0] if row else None
         for item in ingredient_list:
             self.conn.execute(
                 "INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity_g) VALUES (?, ?, ?)",
@@ -626,7 +626,7 @@ CREATE TABLE grocery_lists (
         )
         row = cur.fetchone()
         self.conn.commit()
-        return row[0] if row else None
+        return list(row.values())[0] if row else None
 
     def delete_weekly_template_block(self, block_id):
         self.conn.execute("DELETE FROM weekly_schedule_template WHERE id = ?", (block_id,))
@@ -756,7 +756,7 @@ CREATE TABLE grocery_lists (
             "INSERT INTO workouts (name, duration_mins, location_type, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
             (name, duration_mins, location_type, datetime.now().isoformat()),
         )
-        workout_id = cur.fetchone()[0]
+        row = cur.fetchone(); workout_id = list(row.values())[0] if row else None
         for e in exercise_list:
             self.conn.execute(
                 "INSERT INTO workout_exercises (workout_id, exercise_id, sets, reps, weight) VALUES (?, ?, ?, ?, ?)",
@@ -823,7 +823,7 @@ CREATE TABLE grocery_lists (
         )
         row = cur.fetchone()
         self.conn.commit()
-        return row[0] if row else None
+        return list(row.values())[0] if row else None
 
     def get_events_for_range(self, start_date, end_date):
         rows = self.conn.execute(
@@ -892,7 +892,7 @@ CREATE TABLE grocery_lists (
                     self.refresh_exercise_1rm(exercise_id, new_one_rm)
             except ValueError:
                 pass
-        return cur.fetchone()[0]
+        row = cur.fetchone(); return list(row.values())[0] if row else None
     def update_lift_log(self, log_id, weight, sets, reps):
         if isinstance(weight, (list, tuple)):
             weight = ",".join(str(w) for w in weight)
@@ -959,7 +959,7 @@ CREATE TABLE grocery_lists (
         )
         row = cur.fetchone()
         self.conn.commit()
-        return row[0] if row else None
+        return list(row.values())[0] if row else None
 
     def get_nutrition_history(self, limit=90):
         rows = self.conn.execute(
@@ -1007,7 +1007,7 @@ CREATE TABLE grocery_lists (
         )
         row = cur.fetchone()
         self.conn.commit()
-        return row[0] if row else None
+        return list(row.values())[0] if row else None
 
     def get_active_grocery_list(self):
         row = self.conn.execute(
