@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { CalendarDays, Zap, Search } from 'lucide-react';
+import { CalendarDays, Zap, Search, Plus, X, Trash2, Clock, Save } from 'lucide-react';
 import { fetchJson } from '../../services/api';
 
 const DAYS_OF_WEEK = [
@@ -114,7 +114,7 @@ export default function WeeklyTemplateView({
           </p>
         </div>
         <button className="primary-button" onClick={() => handleOpenAdd('Monday', '09:00')}>
-          ＋ Add Template Block
+          <Plus size={16} className="inline-icon" /> Add Template Block
         </button>
       </div>
 
@@ -143,7 +143,7 @@ export default function WeeklyTemplateView({
                   style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 'bold' }}
                   title="Add block to this day"
                 >
-                  ＋
+                  <Plus size={20} />
                 </button>
               </div>
 
@@ -175,11 +175,11 @@ export default function WeeklyTemplateView({
                             style={{ background: 'rgba(0,0,0,0.2)', border: 'none', color: '#fff', borderRadius: '4px', cursor: 'pointer', padding: '1px 5px', fontSize: '0.75rem' }}
                             title="Remove block"
                           >
-                            ✕
+                            <Trash2 size={12} />
                           </button>
                         </div>
                         <div style={{ fontSize: '0.8rem', marginTop: '4px', opacity: 0.9 }}>
-                          🕒 {block.start_time} ({block.duration_mins} mins)
+                          <Clock size={12} className="inline-icon" /> {block.start_time} ({block.duration_mins} mins)
                         </div>
                       </div>
                     );
@@ -196,7 +196,7 @@ export default function WeeklyTemplateView({
           <div className="modal-card" style={{ maxWidth: '450px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Add Default Template Block</h2>
-              <button className="icon-button" onClick={() => setModalOpen(false)}>✕</button>
+              <button className="icon-button" onClick={() => setModalOpen(false)}><X size={20} /></button>
             </div>
             {statusMsg && <div style={{ color: 'var(--danger)', marginBottom: '8px', fontSize: '0.9rem' }}>{statusMsg}</div>}
             <form onSubmit={handleSaveBlock} className="form-grid">
@@ -309,7 +309,7 @@ export default function WeeklyTemplateView({
 
               <div className="modal-actions" style={{ marginTop: '16px', gridColumn: '1 / -1' }}>
                 <button type="button" className="secondary-button" onClick={() => setModalOpen(false)}>Cancel</button>
-                <button type="submit" className="primary-button">Save to Template</button>
+                <button type="submit" className="primary-button"><Save size={16} className="inline-icon" /> Save to Template</button>
               </div>
             </form>
           </div>

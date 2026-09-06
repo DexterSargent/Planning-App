@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search } from 'lucide-react';
+import { Search, Save, CheckCircle2, Trash2, X } from 'lucide-react';
 import { fetchJson } from '../../services/api';
 
 export default function EventModal({
@@ -318,13 +318,26 @@ export default function EventModal({
             />
           </>
         )}
-        <div className="modal-actions">
-          <button className="secondary-button" onClick={() => setEventModalVisible(false)}>
-            Cancel
-          </button>
-          <button className="primary-button" onClick={handleSaveEvent}>
-            Save event
-          </button>
+        <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+          {scheduleForm.id ? (
+            <button type="button" className="secondary-button" style={{ color: 'var(--danger)', borderColor: 'var(--danger)', padding: '6px 12px' }} onClick={async () => {
+              try {
+                await fetchJson(`/schedule/${scheduleForm.id}`, { method: 'DELETE' });
+                setEventModalVisible(false);
+                if (loadEvents) await loadEvents();
+              } catch (err) { console.error('Error deleting event:', err); }
+            }}>
+              <Trash2 size={16} className="inline-icon" /> Delete
+            </button>
+          ) : <div></div>}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button type="button" className="secondary-button" onClick={() => setEventModalVisible(false)}>
+              <X size={16} className="inline-icon" /> Cancel
+            </button>
+            <button className="primary-button" onClick={handleSaveEvent}>
+              <Save size={16} className="inline-icon" /> Save event
+            </button>
+          </div>
         </div>
 
         {scheduleForm.id && scheduleForm.category === 'Training' && !scheduleForm.is_completed && (
@@ -335,7 +348,7 @@ export default function EventModal({
                 style={{ width: '100%', background: '#10b981', color: '#fff' }}
                 onClick={() => setLoggingMode(true)}
               >
-                ✓ Mark as Completed & Log
+                <CheckCircle2 size={16} className="inline-icon" /> Mark as Completed & Log
               </button>
             ) : (
               <div className="fast-log-container">
@@ -372,10 +385,10 @@ export default function EventModal({
                   })}
                 <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
                   <button className="secondary-button" style={{ flex: 1 }} onClick={() => setLoggingMode(false)}>
-                    Cancel
+                    <X size={16} className="inline-icon" /> Cancel
                   </button>
                   <button className="primary-button" style={{ flex: 1, background: '#10b981', color: '#fff' }} onClick={handleCompleteAndLog}>
-                    Save & Complete
+                    <CheckCircle2 size={16} className="inline-icon" /> Save & Complete
                   </button>
                 </div>
               </div>

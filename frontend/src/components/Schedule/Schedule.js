@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Plus, Zap, Utensils, Dumbbell, ShoppingCart } from 'lucide-react';
+import { Settings, Plus, Zap, Utensils, Dumbbell, ShoppingCart, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getMonthTitle, formatDateFull, CALENDAR_ROW_HEIGHT } from '../../utils/dateUtils';
 import WeeklyTemplateView from './WeeklyTemplateView';
 import WeeklyMealPlannerModal from './WeeklyMealPlannerModal';
@@ -89,13 +89,13 @@ export default function Schedule({
             className="secondary-button today-button"
             onClick={() => setSelectedDate(new Date())}
           >
-            Today
+            <CalendarDays size={16} className="inline-icon" /> Today
           </button>
           <button
             className="primary-button add-event-button"
             onClick={() => openEventModal('work')}
           >
-            <span className="button-icon">＋</span>
+            <span className="button-icon"><Plus size={16} /></span>
             Add event
           </button>
         </div>
@@ -113,11 +113,11 @@ export default function Schedule({
           <div className="month-view">
             <div className="month-view-header">
               <button className="icon-button" onClick={() => changeMonth(-1)}>
-                ‹
+                <ChevronLeft size={20} />
               </button>
               <div className="month-title">{getMonthTitle(selectedDate)}</div>
               <button className="icon-button" onClick={() => changeMonth(1)}>
-                ›
+                <ChevronRight size={20} />
               </button>
             </div>
             <div className="month-weekdays">
@@ -169,11 +169,11 @@ export default function Schedule({
           <div className="week-view">
             <div className="week-view-header schedule-nav-row" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button className="icon-button" onClick={() => changeWeek(-1)}>
-                ‹
+                <ChevronLeft size={20} />
               </button>
               <div className="schedule-view-title">{weekRangeLabel}</div>
               <button className="icon-button" onClick={() => changeWeek(1)}>
-                ›
+                <ChevronRight size={20} />
               </button>
               <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button
@@ -293,7 +293,7 @@ export default function Schedule({
           <div className="day-view">
             <div className="day-view-header schedule-nav-row">
               <button className="icon-button" onClick={() => changeDay(-1)}>
-                ‹
+                <ChevronLeft size={20} />
               </button>
               <div>
                 <span className="day-title">
@@ -302,7 +302,7 @@ export default function Schedule({
                 <strong>{formatDateFull(selectedDate)}</strong>
               </div>
               <button className="icon-button" onClick={() => changeDay(1)}>
-                ›
+                <ChevronRight size={20} />
               </button>
             </div>
             <div className="day-grid-wrapper" ref={weekGridRef}>

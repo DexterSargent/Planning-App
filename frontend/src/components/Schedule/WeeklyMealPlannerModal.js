@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Utensils, Zap } from 'lucide-react';
+import { Utensils, Zap, X } from 'lucide-react';
 import { fetchJson } from '../../services/api';
 
 export default function WeeklyMealPlannerModal({
@@ -131,7 +131,7 @@ export default function WeeklyMealPlannerModal({
               Assign recipes to the Meal events already scheduled on your calendar this week.
             </p>
           </div>
-          <button className="icon-button" onClick={onClose}>✕</button>
+          <button className="icon-button" onClick={onClose}><X size={20} /></button>
         </div>
 
         {statusMsg && <div style={{ color: 'var(--danger)', marginBottom: '12px' }}>{statusMsg}</div>}

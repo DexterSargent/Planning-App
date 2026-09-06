@@ -1,4 +1,5 @@
 import React from 'react';
+import { Dumbbell, Utensils, Save } from 'lucide-react';
 import { formatDateFull } from '../../utils/dateUtils';
 
 export default function Dashboard({
@@ -34,7 +35,7 @@ export default function Dashboard({
         <div className="dashboard-panel workout-panel">
           <div className="section-title">
             <h2>Today's scheduled workout</h2>
-            <button onClick={() => setActiveTab('training')}>Build workout</button>
+            <button onClick={() => setActiveTab('training')} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Dumbbell size={16} /> Build workout</button>
           </div>
           {todayWorkouts.length ? (
             todayWorkouts.map((event) => {
@@ -95,7 +96,7 @@ export default function Dashboard({
                         className="primary-button"
                         onClick={() => handleSavePerformance(event.id, workout)}
                       >
-                        Save workout log
+                        <Save size={16} className="inline-icon" /> Save workout log
                       </button>
                     </div>
                   ) : (
@@ -112,7 +113,7 @@ export default function Dashboard({
         <div className="dashboard-panel meal-panel">
           <div className="section-title">
             <h2>Meals scheduled</h2>
-            <button onClick={() => setActiveTab('mealplan')}>Create meal</button>
+            <button onClick={() => setActiveTab('mealplan')} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Utensils size={16} /> Create meal</button>
           </div>
           <div className="event-list">
             {todayMeals.length ? (

@@ -605,6 +605,11 @@ button.active {
   padding: 24px;
   box-shadow: var(--shadow);
 }
+@media (max-width: 760px) {
+  .schedule-calendar-body {
+    padding: 12px;
+  }
+}
 
 .schedule-legend {
   display: flex;
@@ -757,6 +762,7 @@ button.active {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
@@ -993,8 +999,8 @@ button.active {
 }
 
 @media (max-width: 960px) {
-  .week-grid-row,
-  .day-grid-row {
+  .week-grid-header,
+  .week-calendar-grid {
     grid-template-columns: 80px repeat(7, minmax(80px, 1fr));
   }
 }
@@ -1010,8 +1016,8 @@ button.active {
     display: none;
   }
 
-  .week-grid-row,
-  .day-grid-row {
+  .week-grid-header,
+  .week-calendar-grid {
     grid-template-columns: 70px repeat(7, minmax(80px, 1fr));
   }
 }

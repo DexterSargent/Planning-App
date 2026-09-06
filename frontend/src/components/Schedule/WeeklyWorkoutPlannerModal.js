@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Dumbbell } from 'lucide-react';
+import { Dumbbell, X } from 'lucide-react';
 import { fetchJson } from '../../services/api';
 import MuscleDiagram from '../Training/MuscleDiagram';
 
@@ -140,7 +140,7 @@ export default function WeeklyWorkoutPlannerModal({
               Assign workouts to your scheduled Training blocks and see your weekly muscle volume.
             </p>
           </div>
-          <button className="icon-button" onClick={onClose}>✕</button>
+          <button className="icon-button" onClick={onClose}><X size={20} /></button>
         </div>
 
         {statusMsg && <div style={{ color: 'var(--danger)', marginBottom: '12px' }}>{statusMsg}</div>}
