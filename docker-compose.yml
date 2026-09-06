@@ -10,15 +10,18 @@ services:
       - DATABASE_URL=/data/performance_hq.db
       - PYTHONPATH=/app/src
       - APP_PASSWORD=dexter
+      - GEOAPIFY_API_KEY=${GEOAPIFY_API_KEY}
 
   frontend:
     build:
       context: ./frontend
       args:
         - REACT_APP_API_URL=http://localhost:8000/api
+        - REACT_APP_GEOAPIFY_API_KEY=${GEOAPIFY_API_KEY}
     ports:
       - '3000:3000'
     depends_on:
       - api
     environment:
       - REACT_APP_API_URL=http://localhost:8000/api
+      - REACT_APP_GEOAPIFY_API_KEY=${GEOAPIFY_API_KEY}

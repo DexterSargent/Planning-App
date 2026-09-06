@@ -6,7 +6,10 @@ RUN npm install
 COPY frontend/public ./public
 COPY frontend/src ./src
 # Set API_URL to /api for the production build
-ENV REACT_APP_API_URL=/api
+ARG REACT_APP_API_URL=/api
+ARG REACT_APP_GEOAPIFY_API_KEY
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+ENV REACT_APP_GEOAPIFY_API_KEY=${REACT_APP_GEOAPIFY_API_KEY}
 RUN npm run build
 
 # Stage 2: Build Python API and serve

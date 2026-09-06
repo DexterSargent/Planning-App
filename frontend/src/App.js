@@ -631,6 +631,8 @@ function App() {
           ref_recipe_id: scheduleForm.ref_recipe_id ? Number(scheduleForm.ref_recipe_id) : undefined,
           notes: (scheduleForm.notes || '').trim() || undefined,
           location_type: locType,
+          add_commute: scheduleForm.add_commute || false,
+          commute_mode: scheduleForm.commute_mode || 'drive',
         }),
       });
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import GeoapifyAutocomplete from './GeoapifyAutocomplete';
 
 export default function SettingsModal({
   isOpen,
@@ -8,28 +9,36 @@ export default function SettingsModal({
 }) {
   const [form, setForm] = useState({
     home_address: '',
+    home_coords: '',
     gym_address: '',
+    gym_coords: '',
     gym_commute_mins: '20',
     work_address: '',
+    work_coords: '',
     work_commute_mins: '25',
     field_address: '',
+    field_coords: '',
     field_commute_mins: '30',
     default_commute_mins: '20',
     custom_locations: '[]',
   });
 
   const [customList, setCustomList] = useState([]);
-  const [newCustom, setNewCustom] = useState({ name: '', address: '', mins: '15' });
+  const [newCustom, setNewCustom] = useState({ name: '', address: '', lat: null, lon: null, mins: '15' });
 
   useEffect(() => {
     if (userSettings) {
       setForm({
         home_address: userSettings.home_address || '',
+        home_coords: userSettings.home_coords || '',
         gym_address: userSettings.gym_address || '',
+        gym_coords: userSettings.gym_coords || '',
         gym_commute_mins: userSettings.gym_commute_mins || '20',
         work_address: userSettings.work_address || '',
+        work_coords: userSettings.work_coords || '',
         work_commute_mins: userSettings.work_commute_mins || '25',
         field_address: userSettings.field_address || '',
+        field_coords: userSettings.field_coords || '',
         field_commute_mins: userSettings.field_commute_mins || '30',
         default_commute_mins: userSettings.default_commute_mins || '20',
         custom_locations: userSettings.custom_locations || '[]',
@@ -49,7 +58,7 @@ export default function SettingsModal({
     const updated = [...customList, { ...newCustom, id: Date.now() }];
     setCustomList(updated);
     setForm((prev) => ({ ...prev, custom_locations: JSON.stringify(updated) }));
-    setNewCustom({ name: '', address: '', mins: '15' });
+    setNewCustom({ name: '', address: '', lat: null, lon: null, mins: '15' });
   };
 
   const handleRemoveCustom = (id) => {
@@ -76,9 +85,9 @@ export default function SettingsModal({
         
         <div style={{ marginBottom: '14px' }}>
           <label style={{ fontWeight: 600 }}>Home Address (Start / End base for commutes)</label>
-          <input
+          <GeoapifyAutocomplete
             value={form.home_address}
-            onChange={(e) => setForm((prev) => ({ ...prev, home_address: e.target.value }))}
+            onSelect={(addr, lat, lon) => setForm((prev) => ({ ...prev, home_address: addr, home_coords: `${lat},${lon}` }))}
             placeholder="e.g. 123 Main St, Toronto, ON"
           />
         </div>
@@ -86,9 +95,9 @@ export default function SettingsModal({
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '14px' }}>
           <div>
             <label style={{ fontWeight: 600 }}>Work Address</label>
-            <input
+            <GeoapifyAutocomplete
               value={form.work_address}
-              onChange={(e) => setForm((prev) => ({ ...prev, work_address: e.target.value }))}
+              onSelect={(addr, lat, lon) => setForm((prev) => ({ ...prev, work_address: addr, work_coords: `${lat},${lon}` }))}
               placeholder="e.g. Downtown Office Tower"
             />
           </div>
@@ -106,9 +115,9 @@ export default function SettingsModal({
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '14px' }}>
           <div>
             <label style={{ fontWeight: 600 }}>Gym Address</label>
-            <input
+            <GeoapifyAutocomplete
               value={form.gym_address}
-              onChange={(e) => setForm((prev) => ({ ...prev, gym_address: e.target.value }))}
+              onSelect={(addr, lat, lon) => setForm((prev) => ({ ...prev, gym_address: addr, gym_coords: `${lat},${lon}` }))}
               placeholder="e.g. Performance Gym, King St W"
             />
           </div>
@@ -126,9 +135,9 @@ export default function SettingsModal({
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '14px' }}>
           <div>
             <label style={{ fontWeight: 600 }}>Preferred Field / Sport Address</label>
-            <input
+            <GeoapifyAutocomplete
               value={form.field_address}
-              onChange={(e) => setForm((prev) => ({ ...prev, field_address: e.target.value }))}
+              onSelect={(addr, lat, lon) => setForm((prev) => ({ ...prev, field_address: addr, field_coords: `${lat},${lon}` }))}
               placeholder="e.g. Varsity Stadium"
             />
           </div>
@@ -179,9 +188,9 @@ export default function SettingsModal({
           </div>
           <div>
             <label style={{ fontSize: '0.8rem' }}>Address (Opt)</label>
-            <input
+            <GeoapifyAutocomplete
               value={newCustom.address}
-              onChange={(e) => setNewCustom((prev) => ({ ...prev, address: e.target.value }))}
+              onSelect={(addr, lat, lon) => setNewCustom((prev) => ({ ...prev, address: addr, lat, lon }))}
               placeholder="e.g. Loblaws"
             />
           </div>

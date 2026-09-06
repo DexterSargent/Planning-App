@@ -318,6 +318,75 @@ export default function EventModal({
             />
           </>
         )}
+
+        {scheduleForm.category !== 'Commute' && (
+          <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px', marginBottom: '16px' }}>
+            <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Location (Optional)</span>
+            </label>
+            
+            <select 
+              name="location" 
+              value={scheduleForm.location || ''} 
+              onChange={(e) => setScheduleForm({...scheduleForm, location: e.target.value, commute_mode: scheduleForm.commute_mode || 'drive'})}
+              style={{ marginBottom: '8px' }}
+            >
+              <option value="">-- No Location --</option>
+              {userSettings?.home_address && <option value={userSettings.home_address}>Home ({userSettings.home_address})</option>}
+              {userSettings?.work_address && <option value={userSettings.work_address}>Work ({userSettings.work_address})</option>}
+              {userSettings?.gym_address && <option value={userSettings.gym_address}>Gym ({userSettings.gym_address})</option>}
+              {userSettings?.field_address && <option value={userSettings.field_address}>Field ({userSettings.field_address})</option>}
+              {customLocs.map(c => (
+                <option key={c.id} value={c.address || c.name}>{c.name} ({c.address || c.name})</option>
+              ))}
+            </select>
+
+            {scheduleForm.location && (
+              <div style={{ background: 'var(--input-bg)', padding: '12px', borderRadius: '6px', marginTop: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '8px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={scheduleForm.add_commute || false}
+                    onChange={(e) => setScheduleForm({...scheduleForm, add_commute: e.target.checked})}
+                    style={{ margin: 0 }}
+                  />
+                  Auto-generate commute before and after this event
+                </label>
+                
+                {scheduleForm.add_commute && (
+                  <div>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Transport Mode</label>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                      {[
+                        { val: 'drive', icon: '🚗 Drive' },
+                        { val: 'transit', icon: '🚌 Transit' },
+                        { val: 'bicycle', icon: '🚲 Bike' },
+                        { val: 'walk', icon: '🚶 Walk' }
+                      ].map(mode => (
+                        <button
+                          key={mode.val}
+                          type="button"
+                          onClick={() => setScheduleForm({...scheduleForm, commute_mode: mode.val})}
+                          style={{
+                            flex: 1,
+                            padding: '6px',
+                            borderRadius: '4px',
+                            border: scheduleForm.commute_mode === mode.val ? '2px solid var(--primary)' : '1px solid var(--border)',
+                            background: scheduleForm.commute_mode === mode.val ? 'var(--primary)' : 'transparent',
+                            color: scheduleForm.commute_mode === mode.val ? '#fff' : 'var(--text)',
+                          }}
+                        >
+                          {mode.icon}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
           {scheduleForm.id ? (
             <button type="button" className="secondary-button" style={{ color: 'var(--danger)', borderColor: 'var(--danger)', padding: '6px 12px' }} onClick={async () => {

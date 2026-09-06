@@ -5,8 +5,9 @@ import urllib.parse
 import json
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from fastapi import FastAPI, HTTPException, Request, APIRouter, Depends
+from fastapi import FastAPI, HTTPException, Request, APIRouter, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -197,6 +198,8 @@ class CalendarEventCreate(BaseModel):
     notes: Optional[str] = None
     location_type: Optional[str] = None
     is_completed: Optional[bool] = False
+    add_commute: Optional[bool] = False
+    commute_mode: Optional[str] = "drive"
 
 
 class LiftLogCreate(BaseModel):
@@ -428,9 +431,79 @@ def delete_workout(workout_id: int):
 def get_user_settings():
     return db.get_user_settings()
 
+async def recalculate_distance_matrix(settings_dict: dict):
+    api_key = os.getenv("GEOAPIFY_API_KEY")
+    if not api_key:
+        return
+    
+    # 1. Collect all non-empty coordinates
+    coords = set()
+    for key in ['home_coords', 'work_coords', 'gym_coords', 'field_coords']:
+        if settings_dict.get(key):
+            coords.add(settings_dict[key])
+    
+    # Custom locations
+    try:
+        custom = json.loads(settings_dict.get('custom_locations', '[]'))
+        for c in custom:
+            if c.get('lat') and c.get('lon'):
+                coords.add(f"{c['lat']},{c['lon']}")
+    except:
+        pass
+        
+    coords = list(coords)
+    if len(coords) < 2:
+        return
+        
+    # Prepare points for Geoapify: it expects [lon, lat]
+    locations = []
+    for c in coords:
+        parts = c.split(',')
+        if len(parts) == 2:
+            lat, lon = parts
+            locations.append({"location": [float(lon), float(lat)]})
+        
+    if not locations:
+        return
+        
+    modes = ['drive', 'transit', 'walk', 'bicycle']
+    matrix_result = {}
+    
+    async with httpx.AsyncClient() as client:
+        for mode in modes:
+            body = {
+                "mode": mode,
+                "sources": locations,
+                "targets": locations
+            }
+            try:
+                resp = await client.post(
+                    f"https://api.geoapify.com/v1/routematrix?apiKey={api_key}",
+                    json=body
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    mode_matrix = {}
+                    stt = data.get("sources_to_targets", [])
+                    for i, source in enumerate(coords):
+                        mode_matrix[source] = {}
+                        if i < len(stt):
+                            for j, target in enumerate(coords):
+                                if j < len(stt[i]):
+                                    info = stt[i][j]
+                                    if info is not None:
+                                        mode_matrix[source][target] = info.get("time")
+                    matrix_result[mode] = mode_matrix
+            except Exception as e:
+                print("Geoapify Error:", e)
+                
+    if matrix_result:
+        db.update_user_settings({"distance_matrix": json.dumps(matrix_result)})
+
 @api_router.post("/settings")
-def update_user_settings(data: SettingsUpdate):
+def update_user_settings(data: SettingsUpdate, background_tasks: BackgroundTasks):
     db.update_user_settings(data.settings)
+    background_tasks.add_task(recalculate_distance_matrix, data.settings)
     return {"status": "updated"}
 
 
@@ -480,6 +553,98 @@ def get_calendar_event(event_id: int):
         raise HTTPException(status_code=404, detail="Event not found")
     return event
 
+def parse_time(time_str):
+    if not time_str:
+        return None
+    return datetime.strptime(time_str, "%H:%M")
+
+def get_commute_time(from_coords, to_coords, mode, matrix_json):
+    if not matrix_json or not from_coords or not to_coords: return 20
+    try:
+        matrix = json.loads(matrix_json)
+        # Geoapify route matrix times are in seconds
+        return int(matrix.get(mode, {}).get(from_coords, {}).get(to_coords, 1200) / 60)
+    except:
+        return 20
+
+def generate_commutes(data, settings, events_today):
+    mapping = {}
+    for prefix in ['home', 'work', 'gym', 'field']:
+        addr = settings.get(f"{prefix}_address")
+        coords = settings.get(f"{prefix}_coords")
+        if addr and coords:
+            mapping[addr] = coords
+    try:
+        custom = json.loads(settings.get('custom_locations', '[]'))
+        for c in custom:
+            if c.get('lat') and c.get('lon'):
+                mapping[c.get('address') or c.get('name')] = f"{c['lat']},{c['lon']}"
+    except:
+        pass
+
+    home_addr = settings.get('home_address', 'Home')
+    this_addr = data.location_type or home_addr
+    this_coords = mapping.get(this_addr, mapping.get(home_addr))
+
+    if not data.start_time or not data.duration_mins or not this_coords:
+        return []
+
+    new_start = parse_time(data.start_time)
+    new_end = new_start + timedelta(minutes=data.duration_mins)
+
+    preceding = None
+    succeeding = None
+
+    for ev in events_today:
+        if not ev.get('start_time') or not ev.get('duration_mins') or ev.get('id') == -1:
+            continue
+        ev_start = parse_time(ev['start_time'])
+        ev_end = ev_start + timedelta(minutes=ev['duration_mins'])
+
+        if ev_end <= new_start:
+            if not preceding or ev_end > (parse_time(preceding['start_time']) + timedelta(minutes=preceding['duration_mins'])):
+                preceding = ev
+        if ev_start >= new_end:
+            if not succeeding or ev_start < parse_time(succeeding['start_time']):
+                succeeding = ev
+
+    # Check gap before
+    from_addr = home_addr
+    if preceding:
+        p_end = parse_time(preceding['start_time']) + timedelta(minutes=preceding['duration_mins'])
+        if (new_start - p_end).total_seconds() <= 1800:
+            from_addr = preceding.get('location_type') or home_addr
+
+    # Check gap after
+    to_addr = home_addr
+    if succeeding:
+        s_start = parse_time(succeeding['start_time'])
+        if (s_start - new_end).total_seconds() <= 1800:
+            to_addr = succeeding.get('location_type') or home_addr
+
+    from_coords = mapping.get(from_addr, mapping.get(home_addr))
+    to_coords = mapping.get(to_addr, mapping.get(home_addr))
+
+    commute_to_mins = get_commute_time(from_coords, this_coords, data.commute_mode, settings.get('distance_matrix'))
+    commute_from_mins = get_commute_time(this_coords, to_coords, data.commute_mode, settings.get('distance_matrix'))
+
+    commutes = []
+    if commute_to_mins > 0 and from_coords != this_coords:
+        commutes.append({
+            "title": f"Commute to {this_addr.split(',')[0]}",
+            "start_time": (new_start - timedelta(minutes=commute_to_mins)).strftime("%H:%M"),
+            "duration_mins": commute_to_mins,
+            "location_type": this_addr
+        })
+    if commute_from_mins > 0 and this_coords != to_coords:
+        commutes.append({
+            "title": f"Commute from {this_addr.split(',')[0]}",
+            "start_time": new_end.strftime("%H:%M"),
+            "duration_mins": commute_from_mins,
+            "location_type": to_addr
+        })
+    return commutes
+
 @api_router.post("/calendar")
 def create_calendar_event(data: CalendarEventCreate):
     event_id = db.add_calendar_event(
@@ -494,6 +659,25 @@ def create_calendar_event(data: CalendarEventCreate):
         data.location_type,
         data.is_completed,
     )
+    
+    if data.add_commute:
+        settings = db.get_user_settings()
+        events_today = db.get_events_for_day(data.event_date)
+        commutes = generate_commutes(data, settings, events_today)
+        for c in commutes:
+            db.add_calendar_event(
+                title=c['title'],
+                event_type='Commute',
+                event_date=data.event_date,
+                start_time=c['start_time'],
+                duration_mins=c['duration_mins'],
+                ref_workout_id=None,
+                ref_recipe_id=None,
+                notes=None,
+                location_type=c['location_type'],
+                is_completed=False
+            )
+            
     return {"id": event_id}
 
 @api_router.put("/calendar/{event_id}")
@@ -511,6 +695,25 @@ def update_calendar_event(event_id: int, data: CalendarEventCreate):
         location_type=data.location_type,
         is_completed=data.is_completed,
     )
+    
+    if data.add_commute:
+        settings = db.get_user_settings()
+        events_today = db.get_events_for_day(data.event_date)
+        commutes = generate_commutes(data, settings, events_today)
+        for c in commutes:
+            db.add_calendar_event(
+                title=c['title'],
+                event_type='Commute',
+                event_date=data.event_date,
+                start_time=c['start_time'],
+                duration_mins=c['duration_mins'],
+                ref_workout_id=None,
+                ref_recipe_id=None,
+                notes=None,
+                location_type=c['location_type'],
+                is_completed=False
+            )
+            
     return {"id": event_id}
 
 @api_router.delete("/calendar/{event_id}")
