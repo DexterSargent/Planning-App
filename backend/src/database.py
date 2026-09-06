@@ -436,8 +436,9 @@ CREATE TABLE grocery_lists (
             "INSERT INTO ingredients (name, kcal_per_100g, cost_per_100g, category, in_inventory, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)",
             (name, kcal_per_100g, cost_per_100g, category, int(in_inventory), datetime.now().isoformat()),
         )
+        row = cur.fetchone()
         self.conn.commit()
-        return cur.fetchone()[0]
+        return row[0] if row else None
 
     def get_all_ingredients(self):
         rows = self.conn.execute("SELECT * FROM ingredients ORDER BY name").fetchall()
@@ -480,8 +481,9 @@ CREATE TABLE grocery_lists (
             "INSERT INTO exercises (name, category, one_rm, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
             (name, category, one_rm, datetime.now().isoformat()),
         )
+        row = cur.fetchone()
         self.conn.commit()
-        return cur.fetchone()[0]
+        return row[0] if row else None
 
     def update_exercise(self, exercise_id, name, category=None, one_rm=None):
         self.conn.execute(
@@ -622,8 +624,9 @@ CREATE TABLE grocery_lists (
                OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (day_of_week, title, event_type, start_time, duration_mins, meal_slot_type, notes, ref_workout_id, location, location_type, commute_to_mins, commute_from_mins, datetime.now().isoformat())
         )
+        row = cur.fetchone()
         self.conn.commit()
-        return cur.fetchone()[0]
+        return row[0] if row else None
 
     def delete_weekly_template_block(self, block_id):
         self.conn.execute("DELETE FROM weekly_schedule_template WHERE id = ?", (block_id,))
@@ -818,8 +821,9 @@ CREATE TABLE grocery_lists (
             (title, event_type, event_date, start_time, duration_mins,
              ref_workout_id, ref_recipe_id, notes, location_type, is_completed, datetime.now().isoformat()),
         )
+        row = cur.fetchone()
         self.conn.commit()
-        return cur.fetchone()[0]
+        return row[0] if row else None
 
     def get_events_for_range(self, start_date, end_date):
         rows = self.conn.execute(
@@ -953,8 +957,9 @@ CREATE TABLE grocery_lists (
             "INSERT INTO nutrition_logs (log_date, kcal, cost, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
             (log_date, kcal, cost, datetime.now().isoformat()),
         )
+        row = cur.fetchone()
         self.conn.commit()
-        return cur.fetchone()[0]
+        return row[0] if row else None
 
     def get_nutrition_history(self, limit=90):
         rows = self.conn.execute(
@@ -1000,8 +1005,9 @@ CREATE TABLE grocery_lists (
             "INSERT INTO grocery_lists (week_label, items_json, status, created_at) OUTPUT INSERTED.id VALUES (?, ?, 'active', ?)",
             (week_label, items_json, datetime.now().isoformat()),
         )
+        row = cur.fetchone()
         self.conn.commit()
-        return cur.fetchone()[0]
+        return row[0] if row else None
 
     def get_active_grocery_list(self):
         row = self.conn.execute(
