@@ -71,8 +71,8 @@ button {
   border-radius: 999px;
   background: var(--button-bg);
   color: var(--button-text);
-  padding: 14px 20px;
-  min-height: 48px;
+  padding: 8px 16px;
+  min-height: 40px;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
 }
@@ -266,8 +266,8 @@ h1 {
 }
 
 .search-row button {
-  padding: 0 28px;
-  min-height: 52px;
+  padding: 0 20px;
+  min-height: 40px;
 }
 
 .search-results,
@@ -431,6 +431,14 @@ h1 {
   padding: 16px 18px;
 }
 
+.view-tabs,
+.sub-tabs {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
 .action-row button,
 .inline-action-row button,
 .action-column button,
@@ -439,11 +447,11 @@ h1 {
   border: 1px solid transparent;
   background: var(--button-bg);
   color: var(--button-text);
-  padding: 14px 20px;
+  padding: 8px 16px;
   border-radius: 999px;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
-  min-height: 48px;
+  min-height: 40px;
 }
 
 .action-row button:hover,

@@ -65,7 +65,6 @@ export function TopBar({ activeTab, theme, setTheme, onOpenSettings }) {
         >
           Logout
         </button>
-        <div className="status-pill">Live</div>
       </div>
     </header>
   );
