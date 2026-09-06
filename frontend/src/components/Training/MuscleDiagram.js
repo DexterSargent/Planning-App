@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BicepsFlexed, Star } from 'lucide-react';
+import { Activity, Star } from 'lucide-react';
 
 export default function MuscleDiagram({ selectedMuscle, onSelectMuscle, muscleFrequencies = {}, relativeColoring = false }) {
   const [view, setView] = useState('front'); // 'front' or 'back'
@@ -86,7 +86,7 @@ export default function MuscleDiagram({ selectedMuscle, onSelectMuscle, muscleFr
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
         <div>
           <h4 style={{ margin: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <BicepsFlexed size={20} className="inline-icon" /> Interactive Muscle Diagram
+            <Activity size={20} className="inline-icon" /> Interactive Muscle Diagram
           </h4>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             Click any muscle group(s) below or on the diagram to multi-select & filter exercises
