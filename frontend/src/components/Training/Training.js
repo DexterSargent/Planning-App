@@ -155,6 +155,21 @@ export default function Training({
                 onChange={(e) => setWorkoutExerciseSearch(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text)' }}
               />
+              {workoutExerciseSearch && diagramFilteredExercises.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                  {diagramFilteredExercises.slice(0, 3).map(exercise => (
+                    <button
+                      key={exercise.id}
+                      type="button"
+                      className="secondary-button"
+                      style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                      onClick={() => setWorkoutForm(prev => ({ ...prev, exercise_id: exercise.id }))}
+                    >
+                      {exercise.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <select
               name="exercise_id"

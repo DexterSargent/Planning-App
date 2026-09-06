@@ -251,6 +251,21 @@ export default function MealPlanner({
                 onChange={(e) => setRecipeIngredientSearch(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text)' }}
               />
+              {recipeIngredientSearch && builderFilteredIngredients.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                  {builderFilteredIngredients.slice(0, 3).map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="secondary-button"
+                      style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                      onClick={() => setRecipeForm(prev => ({ ...prev, ingredient_id: item.id }))}
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <select
               name="ingredient_id"
