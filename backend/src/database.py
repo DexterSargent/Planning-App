@@ -839,10 +839,10 @@ CREATE TABLE grocery_lists (
     def get_next_training_event(self, from_date=None):
         from_date = from_date or date.today().isoformat()
         row = self.conn.execute(
-            """SELECT * FROM calendar_events
+            """SELECT TOP 1 * FROM calendar_events
                WHERE event_type = 'Training Session' AND ref_workout_id IS NOT NULL
                  AND event_date >= ?
-               ORDER BY event_date ASC, start_time ASC LIMIT 1""",
+               ORDER BY event_date ASC, start_time ASC""",
             (from_date,),
         ).fetchone()
         return dict(row) if row else None
@@ -918,15 +918,16 @@ CREATE TABLE grocery_lists (
             query += " AND log_date = ?"
             params.append(log_date)
         
-        query += " ORDER BY log_date DESC LIMIT ?"
-        params.append(limit)
+        if limit is not None:
+            query = query.replace("SELECT ", f"SELECT TOP ({int(limit)}) ")
+        query += " ORDER BY log_date DESC"
         
         rows = self.conn.execute(query, tuple(params)).fetchall()
         return list(reversed(self._rows_to_dicts(rows)))
 
     def get_current_1rm_estimate(self, exercise_id):
         row = self.conn.execute(
-            "SELECT weight, reps FROM lift_logs WHERE exercise_id = ? ORDER BY log_date DESC, id DESC LIMIT 1",
+            "SELECT TOP 1 weight, reps FROM lift_logs WHERE exercise_id = ? ORDER BY log_date DESC, id DESC",
             (exercise_id,),
         ).fetchone()
         if not row:
@@ -955,7 +956,8 @@ CREATE TABLE grocery_lists (
 
     def get_nutrition_history(self, limit=90):
         rows = self.conn.execute(
-            "SELECT * FROM nutrition_logs ORDER BY log_date DESC LIMIT ?", (limit,)
+            f"SELECT TOP ({int(limit)}) * FROM nutrition_logs ORDER BY log_date DESC" if limit else "SELECT * FROM nutrition_logs ORDER BY log_date DESC",
+            ()
         ).fetchall()
         return list(reversed(self._rows_to_dicts(rows)))
 
@@ -967,7 +969,7 @@ CREATE TABLE grocery_lists (
     # Settings
     # ------------------------------------------------------------------
     def get_user_settings(self):
-        rows = self.conn.execute("SELECT key, value FROM user_settings").fetchall()
+        rows = self.conn.execute("SELECT [key], value FROM user_settings").fetchall()
         return {r["key"]: r["value"] for r in rows}
 
     def update_user_settings(self, settings_dict):
@@ -1001,7 +1003,7 @@ CREATE TABLE grocery_lists (
 
     def get_active_grocery_list(self):
         row = self.conn.execute(
-            "SELECT * FROM grocery_lists WHERE status = 'active' ORDER BY created_at DESC LIMIT 1"
+            "SELECT TOP 1 * FROM grocery_lists WHERE status = 'active' ORDER BY created_at DESC"
         ).fetchone()
         return dict(row) if row else None
 
