@@ -50,6 +50,7 @@ const eventTypeOptions = [
   { value: 'Meal', label: 'Meal' },
   { value: 'Commute', label: 'Commute' },
   { value: 'Social', label: 'Social' },
+  { value: 'School', label: 'School' },
 ];
 const eventColors = {
   'Work': '#7c3aed',
@@ -57,6 +58,7 @@ const eventColors = {
   'Meal': '#10b981',
   'Commute': '#f59e0b',
   'Social': '#ec4899',
+  'School': '#0ea5e9',
 };
 
 function App() {
@@ -542,6 +544,8 @@ function App() {
       notes: '',
       location: '',
       commute_mode: 'walk',
+      school_class: '',
+      school_type: '',
     });
     setEventModalVisible(true);
   }
@@ -560,6 +564,8 @@ function App() {
       commute_mode: 'walk',
       id: event.id,
       is_completed: event.is_completed,
+      school_class: event.school_class || '',
+      school_type: event.school_type || '',
     });
     setSelectedEvent(event);
     setEventModalVisible(true);
@@ -614,6 +620,8 @@ function App() {
         finalTitle = w ? w.name : 'Training';
       } else if (scheduleForm.category === 'Meal') {
         finalTitle = finalTitle || 'Meal';
+      } else if (scheduleForm.category === 'School') {
+        finalTitle = `${scheduleForm.school_class || ''} - ${scheduleForm.school_type || ''}`.replace(/^- |- $/g, '').trim() || 'School Event';
       } else {
         finalTitle = finalTitle || scheduleForm.category || 'Event';
       }
@@ -633,6 +641,8 @@ function App() {
           location_type: locType,
           add_commute: scheduleForm.add_commute || false,
           commute_mode: scheduleForm.commute_mode || 'drive',
+          school_class: scheduleForm.school_class || undefined,
+          school_type: scheduleForm.school_type || undefined,
         }),
       });
 

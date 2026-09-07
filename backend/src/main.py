@@ -155,6 +155,8 @@ class WeeklyTemplateBlockCreate(BaseModel):
     location_type: Optional[str] = None
     commute_to_mins: Optional[int] = None
     commute_from_mins: Optional[int] = None
+    school_class: Optional[str] = None
+    school_type: Optional[str] = None
 
 class ApplyTemplateRequest(BaseModel):
     week_start_date: str
@@ -200,6 +202,8 @@ class CalendarEventCreate(BaseModel):
     is_completed: Optional[bool] = False
     add_commute: Optional[bool] = False
     commute_mode: Optional[str] = "drive"
+    school_class: Optional[str] = None
+    school_type: Optional[str] = None
 
 
 class LiftLogCreate(BaseModel):
@@ -658,6 +662,8 @@ def create_calendar_event(data: CalendarEventCreate):
         data.notes,
         data.location_type,
         data.is_completed,
+        data.school_class,
+        data.school_type
     )
     
     if data.add_commute:
@@ -694,6 +700,8 @@ def update_calendar_event(event_id: int, data: CalendarEventCreate):
         notes=data.notes,
         location_type=data.location_type,
         is_completed=data.is_completed,
+        school_class=data.school_class,
+        school_type=data.school_type,
     )
     
     if data.add_commute:
@@ -742,7 +750,9 @@ def create_schedule_template_block(data: WeeklyTemplateBlockCreate):
         location=data.location,
         location_type=data.location_type,
         commute_to_mins=data.commute_to_mins,
-        commute_from_mins=data.commute_from_mins
+        commute_from_mins=data.commute_from_mins,
+        school_class=data.school_class,
+        school_type=data.school_type
     )
     return {"id": block_id}
 

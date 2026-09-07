@@ -306,6 +306,10 @@ CREATE TABLE weekly_schedule_template (
         existing_cal_cols = {r["COLUMN_NAME"] for r in c.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='calendar_events'")}
         if "location_type" not in existing_cal_cols:
             c.execute("ALTER TABLE calendar_events ADD location_type NVARCHAR(MAX)")
+        if "school_class" not in existing_cal_cols:
+            c.execute("ALTER TABLE calendar_events ADD school_class NVARCHAR(MAX)")
+        if "school_type" not in existing_cal_cols:
+            c.execute("ALTER TABLE calendar_events ADD school_type NVARCHAR(MAX)")
 
         existing_template_cols = {r["COLUMN_NAME"] for r in c.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='weekly_schedule_template'")}
         if "ref_workout_id" not in existing_template_cols:
@@ -320,6 +324,10 @@ CREATE TABLE weekly_schedule_template (
             c.execute("ALTER TABLE weekly_schedule_template ADD commute_from_mins INTEGER")
         if "created_at" not in existing_template_cols:
             c.execute("ALTER TABLE weekly_schedule_template ADD created_at DATETIME2")
+        if "school_class" not in existing_template_cols:
+            c.execute("ALTER TABLE weekly_schedule_template ADD school_class NVARCHAR(MAX)")
+        if "school_type" not in existing_template_cols:
+            c.execute("ALTER TABLE weekly_schedule_template ADD school_type NVARCHAR(MAX)")
 
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_calendar_event_date') CREATE INDEX idx_calendar_event_date ON calendar_events(event_date)")
         c.execute("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_lift_logs_exercise_date') CREATE INDEX idx_lift_logs_exercise_date ON lift_logs(exercise_id, log_date)")
@@ -617,12 +625,13 @@ CREATE TABLE grocery_lists (
         rows = self.conn.execute("SELECT * FROM weekly_schedule_template ORDER BY id ASC").fetchall()
         return self._rows_to_dicts(rows)
 
-    def add_weekly_template_block(self, day_of_week, title, event_type, start_time="08:00", duration_mins=60, meal_slot_type=None, notes=None, ref_workout_id=None, location=None, location_type=None, commute_to_mins=None, commute_from_mins=None):
+    def add_weekly_template_block(self, day_of_week, title, event_type, start_time="08:00", duration_mins=60, meal_slot_type=None, notes=None, ref_workout_id=None, location=None, location_type=None, commute_to_mins=None, commute_from_mins=None, school_class=None, school_type=None):
         cur = self.conn.execute(
-            """INSERT INTO weekly_schedule_template 
-               (day_of_week, title, event_type, start_time, duration_mins, meal_slot_type, notes, ref_workout_id, location, location_type, commute_to_mins, commute_from_mins, created_at)
-               OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (day_of_week, title, event_type, start_time, duration_mins, meal_slot_type, notes, ref_workout_id, location, location_type, commute_to_mins, commute_from_mins, datetime.now().isoformat())
+            """SET NOCOUNT ON;
+               INSERT INTO weekly_schedule_template 
+               (day_of_week, title, event_type, start_time, duration_mins, meal_slot_type, notes, ref_workout_id, location, location_type, commute_to_mins, commute_from_mins, created_at, school_class, school_type)
+               OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (day_of_week, title, event_type, start_time, duration_mins, meal_slot_type, notes, ref_workout_id, location, location_type, commute_to_mins, commute_from_mins, datetime.now().isoformat(), school_class, school_type)
         )
         row = cur.fetchone()
         self.conn.commit()
@@ -661,7 +670,9 @@ CREATE TABLE grocery_lists (
                 duration_mins=block["duration_mins"] or 60,
                 notes=block["notes"],
                 ref_workout_id=block["ref_workout_id"],
-                location_type=block["location_type"]
+                location_type=block["location_type"],
+                school_class=block.get("school_class"),
+                school_type=block.get("school_type")
             )
             count += 1
 
@@ -813,13 +824,14 @@ CREATE TABLE grocery_lists (
     # Calendar events
     # ------------------------------------------------------------------
     def add_calendar_event(self, title, event_type, event_date, start_time=None,
-                            duration_mins=None, ref_workout_id=None, ref_recipe_id=None, notes=None, location_type=None, is_completed=False):
+                            duration_mins=None, ref_workout_id=None, ref_recipe_id=None, notes=None, location_type=None, is_completed=False, school_class=None, school_type=None):
         cur = self.conn.execute(
-            """INSERT INTO calendar_events
-               (title, event_type, event_date, start_time, duration_mins, ref_workout_id, ref_recipe_id, notes, location_type, is_completed, created_at)
-               OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """SET NOCOUNT ON;
+               INSERT INTO calendar_events
+               (title, event_type, event_date, start_time, duration_mins, ref_workout_id, ref_recipe_id, notes, location_type, is_completed, created_at, school_class, school_type)
+               OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (title, event_type, event_date, start_time, duration_mins,
-             ref_workout_id, ref_recipe_id, notes, location_type, is_completed, datetime.now().isoformat()),
+             ref_workout_id, ref_recipe_id, notes, location_type, is_completed, datetime.now().isoformat(), school_class, school_type),
         )
         row = cur.fetchone()
         self.conn.commit()
@@ -854,12 +866,12 @@ CREATE TABLE grocery_lists (
         return dict(row) if row else None
 
     def update_calendar_event(self, event_id, title, event_type, event_date, start_time=None,
-                               duration_mins=None, ref_workout_id=None, ref_recipe_id=None, notes=None, location_type=None, is_completed=False):
+                               duration_mins=None, ref_workout_id=None, ref_recipe_id=None, notes=None, location_type=None, is_completed=False, school_class=None, school_type=None):
         self.conn.execute(
             """UPDATE calendar_events SET title = ?, event_type = ?, event_date = ?, start_time = ?,
-               duration_mins = ?, ref_workout_id = ?, ref_recipe_id = ?, notes = ?, location_type = ?, is_completed = ? WHERE id = ?""",
+               duration_mins = ?, ref_workout_id = ?, ref_recipe_id = ?, notes = ?, location_type = ?, is_completed = ?, school_class = ?, school_type = ? WHERE id = ?""",
             (title, event_type, event_date, start_time, duration_mins,
-             ref_workout_id, ref_recipe_id, notes, location_type, is_completed, event_id),
+             ref_workout_id, ref_recipe_id, notes, location_type, is_completed, school_class, school_type, event_id),
         )
         self.conn.commit()
 

@@ -805,14 +805,14 @@ button.active {
 
 .week-calendar-grid {
   display: grid;
-  grid-template-columns: 120px repeat(7, minmax(120px, 1fr));
+  grid-template-columns: 60px repeat(7, minmax(180px, 1fr));
   grid-template-rows: 56px repeat(24, 84px);
   position: relative;
 }
 
 .day-calendar-grid {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 60px minmax(0, 1fr);
   grid-template-rows: repeat(24, 84px);
   position: relative;
 }
@@ -1151,6 +1151,15 @@ button.active {
   .top-actions {
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .schedule-nav-row {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  
+  .schedule-nav-row > div {
+    justify-content: center;
   }
 }
 

@@ -106,6 +106,13 @@ export default function EventModal({
     customLocs = [];
   }
 
+  let schoolClasses = [];
+  try {
+    schoolClasses = JSON.parse(userSettings?.school_classes || '[]');
+  } catch (e) {
+    schoolClasses = [];
+  }
+
   const handleSelectFrequentLocation = (e) => {
     const val = e.target.value;
     if (!val) return;
@@ -276,6 +283,45 @@ export default function EventModal({
               type="text"
               value={`${getSelectedRecipeDuration() || 'Auto'}`}
               disabled
+            />
+          </>
+        )}
+        {scheduleForm.category === 'School' && (
+          <>
+            <label>Class</label>
+            <select
+              name="school_class"
+              value={scheduleForm.school_class || ''}
+              onChange={handleEventFormChange}
+            >
+              <option value="">-- Select Class --</option>
+              {schoolClasses.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <label>Type</label>
+            <select
+              name="school_type"
+              value={scheduleForm.school_type || ''}
+              onChange={handleEventFormChange}
+            >
+              <option value="">-- Select Type --</option>
+              <option value="Lecture">Lecture</option>
+              <option value="Tutorial">Tutorial</option>
+              <option value="Lab">Lab</option>
+              <option value="Test">Test</option>
+              <option value="Project Due Date">Project Due Date</option>
+              <option value="Assignment Due Date">Assignment Due Date</option>
+            </select>
+            <label>Duration (mins)</label>
+            <input
+              type="number"
+              name="duration_mins"
+              value={scheduleForm.duration_mins}
+              onChange={handleEventFormChange}
+              placeholder="60"
             />
           </>
         )}

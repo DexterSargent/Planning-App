@@ -32,6 +32,8 @@ export default function WeeklyTemplateView({
     location_type: '',
     commute_to_mins: '',
     commute_from_mins: '',
+    school_class: '',
+    school_type: '',
   });
   const [statusMsg, setStatusMsg] = useState('');
 
@@ -43,6 +45,13 @@ export default function WeeklyTemplateView({
   try {
     if (userSettings?.custom_locations) {
       customLocs = JSON.parse(userSettings.custom_locations);
+    }
+  } catch (e) { }
+
+  let schoolClasses = [];
+  try {
+    if (userSettings?.school_classes) {
+      schoolClasses = JSON.parse(userSettings.school_classes);
     }
   } catch (e) { }
 
@@ -58,6 +67,8 @@ export default function WeeklyTemplateView({
       location_type: '',
       commute_to_mins: '',
       commute_from_mins: '',
+      school_class: '',
+      school_type: '',
     });
     setWorkoutSearch('');
     setModalOpen(true);
@@ -69,7 +80,10 @@ export default function WeeklyTemplateView({
       setStatusMsg('Please enter a title for this Social event.');
       return;
     }
-    const finalTitle = form.title.trim() || (form.event_type === 'meal' ? 'Meal' : form.event_type);
+    let finalTitle = form.title.trim() || (form.event_type === 'meal' ? 'Meal' : form.event_type);
+    if (form.event_type === 'School') {
+      finalTitle = `${form.school_class || ''} - ${form.school_type || ''}`.replace(/^- |- $/g, '').trim() || 'School Event';
+    }
     try {
       await fetchJson('/schedule/template', {
         method: 'POST',
@@ -85,6 +99,8 @@ export default function WeeklyTemplateView({
           location_type: form.location_type,
           commute_to_mins: form.commute_to_mins ? Number(form.commute_to_mins) : null,
           commute_from_mins: form.commute_from_mins ? Number(form.commute_from_mins) : null,
+          school_class: form.school_class,
+          school_type: form.school_type,
         }),
       });
       await fetchWeeklyTemplate();
@@ -220,6 +236,7 @@ export default function WeeklyTemplateView({
                 <option value="Meal">Meal</option>
                 <option value="Commute">Commute</option>
                 <option value="Social">Social</option>
+                <option value="School">School</option>
               </select>
 
               {form.event_type === 'Meal' && (
@@ -258,6 +275,34 @@ export default function WeeklyTemplateView({
                     placeholder="e.g. Dinner with Friends"
                     required
                   />
+                </>
+              )}
+
+              {form.event_type === 'School' && (
+                <>
+                  <label>Class</label>
+                  <select
+                    value={form.school_class || ''}
+                    onChange={(e) => setForm({ ...form, school_class: e.target.value })}
+                  >
+                    <option value="">-- Select Class --</option>
+                    {schoolClasses.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <label>Type (Optional)</label>
+                  <select
+                    value={form.school_type || ''}
+                    onChange={(e) => setForm({ ...form, school_type: e.target.value })}
+                  >
+                    <option value="">-- Select Type --</option>
+                    <option value="Lecture">Lecture</option>
+                    <option value="Tutorial">Tutorial</option>
+                    <option value="Lab">Lab</option>
+                    <option value="Test">Test</option>
+                    <option value="Project Due Date">Project Due Date</option>
+                    <option value="Assignment Due Date">Assignment Due Date</option>
+                  </select>
                 </>
               )}
 

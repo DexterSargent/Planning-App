@@ -21,10 +21,14 @@ export default function SettingsModal({
     field_commute_mins: '30',
     default_commute_mins: '20',
     custom_locations: '[]',
+    school_classes: '[]',
   });
 
   const [customList, setCustomList] = useState([]);
   const [newCustom, setNewCustom] = useState({ name: '', address: '', lat: null, lon: null, mins: '15' });
+
+  const [schoolClassList, setSchoolClassList] = useState([]);
+  const [newSchoolClass, setNewSchoolClass] = useState('');
 
   useEffect(() => {
     if (userSettings) {
@@ -42,11 +46,17 @@ export default function SettingsModal({
         field_commute_mins: userSettings.field_commute_mins || '30',
         default_commute_mins: userSettings.default_commute_mins || '20',
         custom_locations: userSettings.custom_locations || '[]',
+        school_classes: userSettings.school_classes || '[]',
       });
       try {
         setCustomList(JSON.parse(userSettings.custom_locations || '[]'));
       } catch (e) {
         setCustomList([]);
+      }
+      try {
+        setSchoolClassList(JSON.parse(userSettings.school_classes || '[]'));
+      } catch (e) {
+        setSchoolClassList([]);
       }
     }
   }, [userSettings, isOpen]);
@@ -71,8 +81,23 @@ export default function SettingsModal({
     onSaveSettings({
       ...form,
       custom_locations: JSON.stringify(customList),
+      school_classes: JSON.stringify(schoolClassList),
     });
     onClose();
+  };
+
+  const handleAddSchoolClass = () => {
+    if (!newSchoolClass.trim()) return;
+    const updated = [...schoolClassList, newSchoolClass.trim()];
+    setSchoolClassList(updated);
+    setForm((prev) => ({ ...prev, school_classes: JSON.stringify(updated) }));
+    setNewSchoolClass('');
+  };
+
+  const handleRemoveSchoolClass = (className) => {
+    const updated = schoolClassList.filter((c) => c !== className);
+    setSchoolClassList(updated);
+    setForm((prev) => ({ ...prev, school_classes: JSON.stringify(updated) }));
   };
 
   return (
@@ -205,6 +230,33 @@ export default function SettingsModal({
           </div>
           <div>
             <button type="button" className="secondary-button" style={{ padding: '8px 12px', height: '38px' }} onClick={handleAddCustom}>+ Add</button>
+          </div>
+        </div>
+
+        <hr style={{ borderColor: 'var(--border)', margin: '16px 0' }} />
+
+        <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem' }}>School Classes</h4>
+        {schoolClassList.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+            {schoolClassList.map((c, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg)', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                <div><strong>{c}</strong></div>
+                <button type="button" className="icon-button" style={{ color: '#ef4444' }} onClick={() => handleRemoveSchoolClass(c)}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', alignItems: 'end' }}>
+          <div>
+            <label style={{ fontSize: '0.8rem' }}>Class Name</label>
+            <input
+              value={newSchoolClass}
+              onChange={(e) => setNewSchoolClass(e.target.value)}
+              placeholder="e.g. MATH 101"
+            />
+          </div>
+          <div>
+            <button type="button" className="secondary-button" style={{ padding: '8px 12px', height: '38px' }} onClick={handleAddSchoolClass}>+ Add</button>
           </div>
         </div>
 
