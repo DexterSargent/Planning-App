@@ -506,9 +506,9 @@ async def recalculate_distance_matrix(settings_dict: dict):
 
 @api_router.post("/settings")
 def update_user_settings(data: SettingsUpdate, background_tasks: BackgroundTasks):
-    db.update_user_settings(data.settings)
-    background_tasks.add_task(recalculate_distance_matrix, data.settings)
-    return {"status": "updated"}
+    updated = db.update_user_settings(data.settings)
+    background_tasks.add_task(recalculate_distance_matrix, updated)
+    return updated
 
 
 

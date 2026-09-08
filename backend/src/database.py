@@ -441,7 +441,7 @@ CREATE TABLE grocery_lists (
     # ------------------------------------------------------------------
     def add_ingredient(self, name, kcal_per_100g, cost_per_100g, category=None, in_inventory=0):
         cur = self.conn.execute(
-            "INSERT INTO ingredients (name, kcal_per_100g, cost_per_100g, category, in_inventory, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)",
+            "SET NOCOUNT ON; INSERT INTO ingredients (name, kcal_per_100g, cost_per_100g, category, in_inventory, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)",
             (name, kcal_per_100g, cost_per_100g, category, int(in_inventory), datetime.now().isoformat()),
         )
         row = cur.fetchone()
@@ -486,7 +486,7 @@ CREATE TABLE grocery_lists (
     # ------------------------------------------------------------------
     def add_exercise(self, name, category=None, one_rm=None):
         cur = self.conn.execute(
-            "INSERT INTO exercises (name, category, one_rm, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
+            "SET NOCOUNT ON; INSERT INTO exercises (name, category, one_rm, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
             (name, category, one_rm, datetime.now().isoformat()),
         )
         row = cur.fetchone()
@@ -559,7 +559,8 @@ CREATE TABLE grocery_lists (
                     instructions=None, tags=None, meal_type='supper'):
         total_kcal, total_cost = self._compute_recipe_totals(ingredient_list)
         cur = self.conn.execute(
-            """INSERT INTO recipes (name, total_kcal, cost, time_to_cook_mins, servings,
+            """SET NOCOUNT ON;
+               INSERT INTO recipes (name, total_kcal, cost, time_to_cook_mins, servings,
                instructions, tags, meal_type, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (name, total_kcal, total_cost, time_to_cook_mins, servings or 1,
              instructions, tags, meal_type or 'supper', datetime.now().isoformat()),
@@ -764,7 +765,7 @@ CREATE TABLE grocery_lists (
             duration_mins = sum((e.get("sets") or 0) for e in exercise_list) * 3
 
         cur = self.conn.execute(
-            "INSERT INTO workouts (name, duration_mins, location_type, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
+            "SET NOCOUNT ON; INSERT INTO workouts (name, duration_mins, location_type, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
             (name, duration_mins, location_type, datetime.now().isoformat()),
         )
         row = cur.fetchone(); workout_id = list(row.values())[0] if row else None
@@ -891,7 +892,7 @@ CREATE TABLE grocery_lists (
         if isinstance(weight, (list, tuple)):
             weight = ",".join(str(w) for w in weight)
         cur = self.conn.execute(
-            "INSERT INTO lift_logs (exercise_id, log_date, weight, sets, reps, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)",
+            "SET NOCOUNT ON; INSERT INTO lift_logs (exercise_id, log_date, weight, sets, reps, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)",
             (exercise_id, log_date, str(weight), sets, reps, datetime.now().isoformat()),
         )
         self.conn.commit()
@@ -966,7 +967,7 @@ CREATE TABLE grocery_lists (
     def log_nutrition(self, kcal, cost=None, log_date=None):
         log_date = log_date or date.today().isoformat()
         cur = self.conn.execute(
-            "INSERT INTO nutrition_logs (log_date, kcal, cost, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
+            "SET NOCOUNT ON; INSERT INTO nutrition_logs (log_date, kcal, cost, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?)",
             (log_date, kcal, cost, datetime.now().isoformat()),
         )
         row = cur.fetchone()
@@ -1014,7 +1015,7 @@ CREATE TABLE grocery_lists (
     # ------------------------------------------------------------------
     def add_grocery_list(self, week_label, items_json):
         cur = self.conn.execute(
-            "INSERT INTO grocery_lists (week_label, items_json, status, created_at) OUTPUT INSERTED.id VALUES (?, ?, 'active', ?)",
+            "SET NOCOUNT ON; INSERT INTO grocery_lists (week_label, items_json, status, created_at) OUTPUT INSERTED.id VALUES (?, ?, 'active', ?)",
             (week_label, items_json, datetime.now().isoformat()),
         )
         row = cur.fetchone()

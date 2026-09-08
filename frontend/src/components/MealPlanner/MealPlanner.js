@@ -259,7 +259,10 @@ export default function MealPlanner({
                       type="button"
                       className="secondary-button"
                       style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                      onClick={() => setRecipeForm(prev => ({ ...prev, ingredient_id: item.id }))}
+                      onClick={() => {
+                        setRecipeForm(prev => ({ ...prev, ingredient_id: item.id }));
+                        setRecipeIngredientSearch('');
+                      }}
                     >
                       {item.name}
                     </button>

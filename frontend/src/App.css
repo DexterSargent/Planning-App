@@ -928,8 +928,9 @@ button.active {
   position: sticky;
   top: 0;
   left: 0;
-  z-index: 11;
-  background: var(--background);
+  z-index: 12;
+  background: var(--surface);
+  box-shadow: 2px 0 5px rgba(0,0,0,0.05);
 }
 
 .week-time-header,
@@ -948,7 +949,8 @@ button.active {
   position: sticky;
   left: 0;
   z-index: 9;
-  background: var(--background);
+  background: var(--surface);
+  box-shadow: 2px 0 5px rgba(0,0,0,0.05);
 }
 
 .week-day-header {

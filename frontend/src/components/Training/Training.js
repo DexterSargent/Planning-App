@@ -163,7 +163,10 @@ export default function Training({
                       type="button"
                       className="secondary-button"
                       style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                      onClick={() => setWorkoutForm(prev => ({ ...prev, exercise_id: exercise.id }))}
+                      onClick={() => {
+                        setWorkoutForm(prev => ({ ...prev, exercise_id: exercise.id }));
+                        setWorkoutExerciseSearch('');
+                      }}
                     >
                       {exercise.name}
                     </button>

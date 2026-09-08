@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { X, Save, Plus } from 'lucide-react';
 import GeoapifyAutocomplete from './GeoapifyAutocomplete';
 
 export default function SettingsModal({
@@ -229,7 +230,9 @@ export default function SettingsModal({
             />
           </div>
           <div>
-            <button type="button" className="secondary-button" style={{ padding: '8px 12px', height: '38px' }} onClick={handleAddCustom}>+ Add</button>
+            <button type="button" className="secondary-button" style={{ padding: '8px 12px', height: '38px' }} onClick={handleAddCustom}>
+              <Plus size={16} className="inline-icon" /> Add
+            </button>
           </div>
         </div>
 
@@ -256,16 +259,18 @@ export default function SettingsModal({
             />
           </div>
           <div>
-            <button type="button" className="secondary-button" style={{ padding: '8px 12px', height: '38px' }} onClick={handleAddSchoolClass}>+ Add</button>
+            <button type="button" className="secondary-button" style={{ padding: '8px 12px', height: '38px' }} onClick={handleAddSchoolClass}>
+              <Plus size={16} className="inline-icon" /> Add
+            </button>
           </div>
         </div>
 
         <div className="modal-actions" style={{ marginTop: '24px' }}>
           <button className="secondary-button" onClick={onClose}>
-            Cancel
+            <X size={16} className="inline-icon" /> Cancel
           </button>
           <button className="primary-button" onClick={handleSave}>
-            Save Settings
+            <Save size={16} className="inline-icon" /> Save Settings
           </button>
         </div>
       </div>
