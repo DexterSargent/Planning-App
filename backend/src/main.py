@@ -58,6 +58,36 @@ def run_test_data():
         
     return {"status": "success", "lifts": logs_added, "nutrition": nut_added}
 
+@app.get("/api/inject")
+def inject_workout():
+    workout_name = "Push Day"
+    exercises = [
+        {"name": "Barbell Flat Bench Press", "sets": 3, "reps": 10, "weight": "155 lbs"},
+        {"name": "Tricep Rope Pushdown", "sets": 3, "reps": 20, "weight": "60 lbs"},
+        {"name": "Incline Dumbbell Press", "sets": 4, "reps": 6, "weight": "60 lbs"},
+        {"name": "Dumbbell Lateral Raise", "sets": 3, "reps": 12, "weight": "20 lbs"},
+        {"name": "Standing Barbell Overhead Press", "sets": 3, "reps": 10, "weight": "95 lbs"},
+        {"name": "Front Dumbbell Raise", "sets": 3, "reps": 10, "weight": "25 lbs"}
+    ]
+    
+    exercise_list = []
+    for e in exercises:
+        exs = db.search_exercises(e["name"])
+        if exs:
+            exercise_list.append({
+                "exercise_id": exs[0]["id"],
+                "sets": e["sets"],
+                "reps": e["reps"],
+                "weight": e["weight"]
+            })
+    
+    try:
+        w_id = db.add_workout(workout_name, exercise_list, duration_mins=60, location_type='gym')
+        return {"status": "success", "workout_id": w_id}
+    except Exception as e:
+        import traceback
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -400,13 +430,19 @@ def get_workout_exercises(workout_id: int):
 
 @api_router.post("/workouts")
 def create_workout(data: WorkoutCreate):
-    workout_id = db.add_workout(
-        data.name,
-        [item.model_dump() for item in data.exercise_list],
-        duration_mins=data.duration_mins,
-        location_type=data.location_type,
-    )
-    return {"id": workout_id}
+    try:
+        workout_id = db.add_workout(
+            data.name,
+            [item.model_dump() for item in data.exercise_list],
+            duration_mins=data.duration_mins,
+            location_type=data.location_type,
+        )
+        return {"id": workout_id}
+    except Exception as e:
+        import traceback
+        with open("/data/workout_error.log", "w") as f:
+            f.write(traceback.format_exc())
+        raise e
 
 @api_router.put("/workouts/{workout_id}")
 def update_workout(workout_id: int, data: WorkoutCreate):
