@@ -36,33 +36,21 @@ class PyODBCDictCursor:
         return self
         
     def fetchall(self):
-        try:
-            if not self.cursor.description: return []
-            rows = self.cursor.fetchall()
-            if not rows: return []
-            cols = [column[0] for column in self.cursor.description]
-            return [dict(zip(cols, row)) for row in rows]
-        finally:
-            try:
-                self.cursor.close()
-            except:
-                pass
-        
+        if not self.cursor.description: return []
+        rows = self.cursor.fetchall()
+        if not rows: return []
+        cols = [column[0] for column in self.cursor.description]
+        return [dict(zip(cols, row)) for row in rows]
+
     def __iter__(self):
         return iter(self.fetchall())
-        
+
     def fetchone(self):
-        try:
-            if not self.cursor.description: return None
-            row = self.cursor.fetchone()
-            if not row: return None
-            cols = [column[0] for column in self.cursor.description]
-            return dict(zip(cols, row))
-        finally:
-            try:
-                self.cursor.close()
-            except:
-                pass
+        if not self.cursor.description: return None
+        row = self.cursor.fetchone()
+        if not row: return None
+        cols = [column[0] for column in self.cursor.description]
+        return dict(zip(cols, row))
         
     def __getattr__(self, name):
         return getattr(self.cursor, name)
