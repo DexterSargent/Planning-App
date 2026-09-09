@@ -903,6 +903,8 @@ CREATE TABLE grocery_lists (
             "SET NOCOUNT ON; INSERT INTO lift_logs (exercise_id, log_date, weight, sets, reps, created_at) OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)",
             (exercise_id, log_date, str(weight), sets, reps, datetime.now().isoformat()),
         )
+        row = cur.fetchone()
+        log_id = list(row.values())[0] if row else None
         self.conn.commit()
         if reps is not None and reps > 0:
             try:
@@ -913,7 +915,7 @@ CREATE TABLE grocery_lists (
                     self.refresh_exercise_1rm(exercise_id, new_one_rm)
             except ValueError:
                 pass
-        row = cur.fetchone(); return list(row.values())[0] if row else None
+        return log_id
     def update_lift_log(self, log_id, weight, sets, reps):
         if isinstance(weight, (list, tuple)):
             weight = ",".join(str(w) for w in weight)
