@@ -149,7 +149,7 @@ export default function EventDetailsModal({
           </button>
         </div>
 
-        {selectedEvent.event_type === 'Training' && (
+        {selectedEvent.event_type?.startsWith('Training') && (
           <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
             {!loggingMode ? (
               <button 

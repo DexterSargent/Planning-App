@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import MuscleDiagram from './MuscleDiagram';
 import ExerciseModal from '../Modals/ExerciseModal';
+import WorkoutLogs from './WorkoutLogs';
 import { Search, Pin, Library } from 'lucide-react';
 import { fetchJson } from '../../services/api';
 
@@ -22,6 +23,8 @@ export default function Training({
   filteredExercises,
   openExerciseEdit,
   handleDeleteExercise,
+  events,
+  setEvents,
 }) {
   const [selectedMuscles, setSelectedMuscles] = useState([]);
   const [workoutExerciseSearch, setWorkoutExerciseSearch] = useState('');
@@ -102,6 +105,12 @@ export default function Training({
           onClick={() => setTrainingTab('exercises')}
         >
           Exercises
+        </button>
+        <button
+          className={trainingTab === 'logs' ? 'active' : ''}
+          onClick={() => setTrainingTab('logs')}
+        >
+          Workout Logs
         </button>
       </div>
 
@@ -344,6 +353,8 @@ export default function Training({
             </div>
           </div>
         </div>
+      ) : trainingTab === 'logs' ? (
+        <WorkoutLogs events={events} exercises={exercises} />
       ) : trainingTab === 'list' ? (
         <div className="panel list-card">
           <div className="section-title">

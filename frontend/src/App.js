@@ -1293,7 +1293,7 @@ function App() {
       await Promise.all(workoutExercisesList.map((exercise) => {
         const key = performanceFieldKey(eventId, exercise.exercise_id);
         const weight = entries[key] || exercise.weight || '';
-        return fetchJson('/logs/lift', {
+        return fetchJson('/logs/lifts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1304,7 +1304,23 @@ function App() {
           }),
         });
       }));
-      setStatusMessage('Workout performance logged.');
+      
+      const event = events.find(e => e.id === eventId);
+      if (event && !event.is_completed) {
+        await fetchJson(`/calendar/${eventId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...event,
+            category: event.event_type,
+            date: event.event_date,
+            is_completed: true
+          })
+        });
+        setEvents(prev => prev.map(e => e.id === eventId ? { ...e, is_completed: true } : e));
+      }
+
+      setStatusMessage('Workout performance logged and marked as completed.');
     } catch (error) {
       setStatusMessage(error.message);
     }
@@ -1457,6 +1473,8 @@ function App() {
             filteredExercises={filteredExercises}
             openExerciseEdit={openExerciseEdit}
             handleDeleteExercise={handleDeleteExercise}
+            events={events}
+            setEvents={setEvents}
           />
         )}
 
