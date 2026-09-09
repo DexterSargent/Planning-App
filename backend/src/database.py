@@ -24,25 +24,45 @@ from datetime import datetime, date, timedelta
 class PyODBCDictCursor:
     def __init__(self, cursor):
         self.cursor = cursor
-        
+
+    def __del__(self):
+        try:
+            self.cursor.close()
+        except:
+            pass
+
     def execute(self, *args, **kwargs):
         self.cursor.execute(*args, **kwargs)
         return self
         
     def fetchall(self):
-        rows = self.cursor.fetchall()
-        if not rows: return []
-        cols = [column[0] for column in self.cursor.description]
-        return [dict(zip(cols, row)) for row in rows]
+        try:
+            if not self.cursor.description: return []
+            rows = self.cursor.fetchall()
+            if not rows: return []
+            cols = [column[0] for column in self.cursor.description]
+            return [dict(zip(cols, row)) for row in rows]
+        finally:
+            try:
+                self.cursor.close()
+            except:
+                pass
         
     def __iter__(self):
         return iter(self.fetchall())
         
     def fetchone(self):
-        row = self.cursor.fetchone()
-        if not row: return None
-        cols = [column[0] for column in self.cursor.description]
-        return dict(zip(cols, row))
+        try:
+            if not self.cursor.description: return None
+            row = self.cursor.fetchone()
+            if not row: return None
+            cols = [column[0] for column in self.cursor.description]
+            return dict(zip(cols, row))
+        finally:
+            try:
+                self.cursor.close()
+            except:
+                pass
         
     def __getattr__(self, name):
         return getattr(self.cursor, name)
