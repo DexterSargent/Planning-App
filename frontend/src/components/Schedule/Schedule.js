@@ -283,7 +283,7 @@ export default function Schedule({
                             30,
                             height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT
                           )}px`,
-                          gridColumn: index + 2,
+                          gridColumn: `${index + 2} / span 1`,
                           gridRow: '1 / -1',
                           left: '2px',
                           right: '2px',
@@ -383,7 +383,7 @@ export default function Schedule({
                             30,
                             height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT
                           )}px`,
-                          gridColumn: 2,
+                          gridColumn: '2 / span 1',
                           gridRow: '1 / -1',
                           left: '2px',
                           right: '2px',
