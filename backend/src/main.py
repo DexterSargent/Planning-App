@@ -765,6 +765,11 @@ def delete_calendar_event(event_id: int):
     db.delete_calendar_event(event_id)
     return {"status": "deleted"}
 
+@api_router.delete("/calendar")
+def delete_calendar_events_in_range(start_date: str, end_date: str):
+    db.delete_calendar_events_in_range(start_date, end_date)
+    return {"status": "deleted"}
+
 # ------------------------------------------------------------------
 # Weekly Schedule Template
 # ------------------------------------------------------------------

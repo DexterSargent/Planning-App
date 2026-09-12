@@ -888,6 +888,10 @@ CREATE TABLE grocery_lists (
         self.conn.execute("DELETE FROM calendar_events WHERE id = ?", (event_id,))
         self.conn.commit()
 
+    def delete_calendar_events_in_range(self, start_date, end_date):
+        self.conn.execute("DELETE FROM calendar_events WHERE event_date >= ? AND event_date <= ?", (start_date, end_date))
+        self.conn.commit()
+
     # ------------------------------------------------------------------
     # Analytics logs
     # ------------------------------------------------------------------

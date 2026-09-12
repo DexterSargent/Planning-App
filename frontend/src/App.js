@@ -589,6 +589,17 @@ function App() {
     }
   }
 
+  async function handleClearEvents(startDate, endDate) {
+    if (!window.confirm(`Clear all events between ${startDate} and ${endDate}?`)) return;
+    try {
+      await fetchJson(`/calendar?start_date=${startDate}&end_date=${endDate}`, { method: 'DELETE' });
+      await loadScheduleRange();
+      setStatusMessage('Events cleared.');
+    } catch (error) {
+      setStatusMessage(error.message);
+    }
+  }
+
   async function handleSaveEvent(e) {
     if (e && e.preventDefault) e.preventDefault();
     try {
@@ -1508,6 +1519,7 @@ function App() {
             weeklyTemplate={weeklyTemplate}
             fetchWeeklyTemplate={fetchWeeklyTemplate}
             recipes={recipes}
+            handleClearEvents={handleClearEvents}
             refreshAll={refreshAll}
             workouts={workouts}
             workoutExercises={workoutExercises}

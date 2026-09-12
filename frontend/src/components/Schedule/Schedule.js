@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Plus, Zap, Utensils, Dumbbell, ShoppingCart, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Settings, Plus, Zap, Utensils, Dumbbell, ShoppingCart, CalendarDays, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { getMonthTitle, formatDateFull, CALENDAR_ROW_HEIGHT } from '../../utils/dateUtils';
 import WeeklyTemplateView from './WeeklyTemplateView';
 import WeeklyMealPlannerModal from './WeeklyMealPlannerModal';
@@ -34,11 +34,14 @@ export default function Schedule({
   onGenerateGroceryList,
   weeklyTemplate,
   fetchWeeklyTemplate,
+  handleClearEvents,
   recipes = [],
   refreshAll,
   workouts,
   workoutExercises,
   userSettings,
+  updateSettings,
+  fetchSettings,
 }) {
   const [mealPlannerModalVisible, setMealPlannerModalVisible] = useState(false);
   const [workoutPlannerModalVisible, setWorkoutPlannerModalVisible] = useState(false);
@@ -119,6 +122,15 @@ export default function Schedule({
               <button className="icon-button" onClick={() => changeMonth(1)}>
                 <ChevronRight size={20} />
               </button>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                <button
+                  className="secondary-button"
+                  style={{ fontSize: '0.85rem', color: '#ef4444', border: '1px solid #ef4444' }}
+                  onClick={() => handleClearEvents(monthGrid[0][0].date, monthGrid[monthGrid.length - 1][6].date)}
+                >
+                  <Trash2 size={16} className="inline-icon" /> Clear Month
+                </button>
+              </div>
             </div>
             <div className="month-weekdays">
               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((weekday) => (
@@ -206,6 +218,13 @@ export default function Schedule({
                 >
                   <ShoppingCart size={16} className="inline-icon" /> Generate grocery list
                 </button>
+                <button
+                  className="secondary-button"
+                  style={{ fontSize: '0.85rem', color: '#ef4444', border: '1px solid #ef4444' }}
+                  onClick={() => handleClearEvents(weekDates[0].date, weekDates[weekDates.length - 1].date)}
+                >
+                  <Trash2 size={16} className="inline-icon" /> Clear Week
+                </button>
               </div>
             </div>
             <div className="week-grid-wrapper" ref={weekGridRef}>
@@ -264,8 +283,11 @@ export default function Schedule({
                             30,
                             height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT
                           )}px`,
-                          left: `calc(60px + (${index} * ((100% - 60px) / 7)) + 2px)`,
-                          width: `calc((100% - 60px) / 7 - 4px)`,
+                          gridColumn: index + 2,
+                          gridRow: '1 / -1',
+                          left: '2px',
+                          right: '2px',
+                          width: 'auto',
                           background: eventColors[event.event_type],
                         }}
                         onPointerDown={(e) => handleEventPointerDown(e, event)}
@@ -304,6 +326,15 @@ export default function Schedule({
               <button className="icon-button" onClick={() => changeDay(1)}>
                 <ChevronRight size={20} />
               </button>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                <button
+                  className="secondary-button"
+                  style={{ fontSize: '0.85rem', color: '#ef4444', border: '1px solid #ef4444' }}
+                  onClick={() => handleClearEvents(currentDay, currentDay)}
+                >
+                  <Trash2 size={16} className="inline-icon" /> Clear Day
+                </button>
+              </div>
             </div>
             <div className="day-grid-wrapper" ref={weekGridRef}>
               <div className="day-grid day-calendar-grid">
@@ -352,6 +383,11 @@ export default function Schedule({
                             30,
                             height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT
                           )}px`,
+                          gridColumn: 2,
+                          gridRow: '1 / -1',
+                          left: '2px',
+                          right: '2px',
+                          width: 'auto',
                           background: eventColors[event.event_type],
                         }}
                         onPointerDown={(e) => handleEventPointerDown(e, event)}
