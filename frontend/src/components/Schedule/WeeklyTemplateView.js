@@ -76,8 +76,8 @@ export default function WeeklyTemplateView({
 
   const handleSaveBlock = async (e) => {
     e.preventDefault();
-    if (!form.title.trim() && form.event_type === 'Social') {
-      setStatusMsg('Please enter a title for this Social event.');
+    if (!form.title.trim() && form.event_type === 'Social/Other') {
+      setStatusMsg('Please enter a title for this Social/Other event.');
       return;
     }
     let finalTitle = form.title.trim() || (form.event_type === 'meal' ? 'Meal' : form.event_type);
@@ -235,7 +235,7 @@ export default function WeeklyTemplateView({
                 <option value="Training">Training</option>
                 <option value="Meal">Meal</option>
                 <option value="Commute">Commute</option>
-                <option value="Social">Social</option>
+                <option value="Social/Other">Social/Other</option>
                 <option value="School">School</option>
               </select>
 
@@ -265,7 +265,7 @@ export default function WeeklyTemplateView({
                 </div>
               )}
 
-              {form.event_type === 'Social' && (
+              {form.event_type === 'Social/Other' && (
                 <>
                   <label>Title</label>
                   <input

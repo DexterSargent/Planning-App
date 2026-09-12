@@ -264,8 +264,8 @@ export default function Schedule({
                             30,
                             height + (resizeDelta / 60) * CALENDAR_ROW_HEIGHT
                           )}px`,
-                          left: `calc(120px + (${index} * ((100% - 120px) / 7)) + 8px)`,
-                          width: `calc((100% - 120px) / 7 - 16px)`,
+                          left: `calc(60px + (${index} * ((100% - 60px) / 7)) + 2px)`,
+                          width: `calc((100% - 60px) / 7 - 4px)`,
                           background: eventColors[event.event_type],
                         }}
                         onPointerDown={(e) => handleEventPointerDown(e, event)}

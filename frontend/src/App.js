@@ -49,7 +49,7 @@ const eventTypeOptions = [
   { value: 'Training', label: 'Training' },
   { value: 'Meal', label: 'Meal' },
   { value: 'Commute', label: 'Commute' },
-  { value: 'Social', label: 'Social' },
+  { value: 'Social/Other', label: 'Social/Other' },
   { value: 'School', label: 'School' },
 ];
 const eventColors = {
@@ -57,7 +57,7 @@ const eventColors = {
   'Training': '#2563eb',
   'Meal': '#10b981',
   'Commute': '#f59e0b',
-  'Social': '#ec4899',
+  'Social/Other': '#ec4899',
   'School': '#0ea5e9',
 };
 
@@ -206,7 +206,7 @@ function App() {
     training: 'Training',
     meal: 'Meal',
     commute: 'Commute',
-    social: 'Social',
+    social: 'Social/Other',
   };
 
   useEffect(() => {

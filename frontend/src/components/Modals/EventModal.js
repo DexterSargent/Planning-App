@@ -158,7 +158,7 @@ export default function EventModal({
     <div className="modal-overlay" onClick={() => setEventModalVisible(false)}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '540px', maxHeight: '90vh', overflowY: 'auto' }}>
         <h3>Add/Edit calendar event</h3>
-        {scheduleForm.category === 'Social' && (
+        {scheduleForm.category === 'Social/Other' && (
           <>
             <label>Title / Description</label>
             <input
@@ -337,7 +337,7 @@ export default function EventModal({
             />
           </>
         )}
-        {scheduleForm.category === 'Social' && (
+        {scheduleForm.category === 'Social/Other' && (
           <>
             <label>Minimum duration (mins)</label>
             <input
